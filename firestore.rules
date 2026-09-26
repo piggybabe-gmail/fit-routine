@@ -1,0 +1,77 @@
+rules_version = '2';
+// Fit Routine by Beer — สิทธิ์การเข้าถึงข้อมูล
+// เจ้าของ = บัญชี Google ด้านล่าง: เปลี่ยน YOUR_GOOGLE_EMAIL เป็นอีเมลของคุณก่อนกด Publish
+// สมาชิก = อุปกรณ์ที่เข้าผ่านลิงก์เชิญ + พิมพ์ชื่อตรงกับที่เจ้าของตั้ง
+//   role "trainer" : ดูทุกอย่าง, บันทึกการเทรน/แผนซ้อม, ส่งข้อความ, แนบรูป
+//   role "viewer"  : ดูอย่างเดียว + ส่งข้อความ
+//   role "owner"   : อุปกรณ์เพิ่มของเจ้าของ (สิทธิ์เท่าเจ้าของ)
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function devPath() { return /databases/$(database)/documents/memberDevices/$(request.auth.uid); }
+    function hasDevice() { return signedIn() && exists(devPath()); }
+    function member() { return get(/databases/$(database)/documents/members/$(get(devPath()).data.memberId)).data; }
+    function isGoogleOwner() {
+      return signedIn()
+        && request.auth.token.email == 'YOUR_GOOGLE_EMAIL'
+        && request.auth.token.email_verified == true;
+    }
+    // เจ้าของ = บัญชี Google หรืออุปกรณ์ที่เจ้าของเพิ่มด้วยสิทธิ์ "เจ้าของ" (เช่น แอปบนหน้าจอโฮม iPad)
+    function isOwner() { return isGoogleOwner() || (hasDevice() && member().active == true && member().role == 'owner'); }
+    function isMember() { return isOwner() || (hasDevice() && member().active == true); }
+    function isTrainer() { return isOwner() || (isMember() && member().role == 'trainer'); }
+    function small() { return request.resource.data.size() < 60; }
+
+    // สมาชิกและลิงก์เชิญ: เจ้าของจัดการ, สมาชิกอ่านได้เฉพาะของตัวเอง
+    match /members/{memberId} {
+      allow read, write: if isOwner();
+      allow get: if hasDevice() && get(devPath()).data.memberId == memberId;
+    }
+
+    // อุปกรณ์ที่ผูกกับสมาชิก: สร้างได้เมื่อรหัสเชิญและชื่อตรงกัน
+    match /memberDevices/{uid} {
+      allow read: if isOwner() || (signedIn() && request.auth.uid == uid);
+      allow delete: if isOwner() || (signedIn() && request.auth.uid == uid);
+      allow update: if false;
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['memberId', 'code', 'nameKey', 'joinedAt', 'device'])
+        && exists(/databases/$(database)/documents/members/$(request.resource.data.memberId))
+        && get(/databases/$(database)/documents/members/$(request.resource.data.memberId)).data.active == true
+        && get(/databases/$(database)/documents/members/$(request.resource.data.memberId)).data.inviteCode == request.resource.data.code
+        && get(/databases/$(database)/documents/members/$(request.resource.data.memberId)).data.nameKey == request.resource.data.nameKey;
+    }
+
+    // ตั้งค่าแอป (LINE ฯลฯ)
+    match /config/{id} {
+      allow read: if isMember();
+      allow write: if isOwner();
+    }
+
+    // ข้อมูลของเจ้าของ: ทุกคนในทีมอ่านได้ เจ้าของแก้ได้คนเดียว
+    match /profile/{id} { allow read: if isMember(); allow write: if isOwner(); }
+    match /days/{id}    { allow read: if isMember(); allow write: if isOwner(); }
+    match /recipes/{id} { allow read: if isMember(); allow write: if isOwner(); }
+    match /pantry/{id}  { allow read: if isMember(); allow write: if isOwner(); }
+
+    // แผนซ้อมและบันทึกการเทรน: เทรนเนอร์แก้ได้
+    match /plan/{id}     { allow read: if isMember(); allow write: if isTrainer(); }
+    match /workouts/{id} { allow read: if isMember(); allow write: if isTrainer() && (request.resource == null || small()); }
+
+    // รูปภาพ (ย่อแล้ว เก็บเป็นข้อความ): สมาชิกเพิ่มได้ ลบได้เฉพาะเจ้าของหรือคนที่เพิ่ม
+    match /photos/{id} {
+      allow read: if isMember();
+      allow create: if isMember() && request.resource.data.byUid == request.auth.uid;
+      allow delete: if isOwner() || (isMember() && resource.data.byUid == request.auth.uid);
+      allow update: if false;
+    }
+
+    // ความเคลื่อนไหว / ข้อความในทีม
+    match /activity/{id} {
+      allow read: if isMember();
+      allow create: if isMember() && request.resource.data.byUid == request.auth.uid;
+      allow delete: if isOwner();
+      allow update: if false;
+    }
+  }
+}

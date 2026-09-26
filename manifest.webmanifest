@@ -1,0 +1,12 @@
+{
+  "name": "Fit Routine by Beer",
+  "short_name": "Fit Routine",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#09111E",
+  "theme_color": "#09111E",
+  "icons": [
+    { "src": "img/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "img/icon-512.jpg", "sizes": "512x512", "type": "image/jpeg" }
+  ]
+}
