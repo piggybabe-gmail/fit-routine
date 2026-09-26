@@ -76,12 +76,12 @@ function flushLine(beacon) {
   } catch (e) { }
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { clearTimeout(queueLine._t); flushLine(true); } });
-async function logAct(type, text, { line = true } = {}) {
+async function logAct(type, text, { line = true, fileIds } = {}) {
   if (!S.me) return;
   const id = 'a-' + Date.now().toString(36) + newId();
   const icon = { food: '🍽', train: '🏋️', body: '📏', msg: '💬', water: '💧', ex: '🏊', recipe: '📖', pantry: '🧺' }[type] || '•';
-  try { await fb.setDoc(ref('activity/' + id), { at: Date.now(), type, text, byName: S.me.name, byRole: S.me.role, byUid: S.me.uid }); } catch (e) { console.warn(e); }
-  if (line) queueLine(`${icon} ${S.me.name}: ${text}`);
+  try { await fb.setDoc(ref('activity/' + id), { at: Date.now(), type, text, byName: S.me.name, byRole: S.me.role, byUid: S.me.uid, ...(fileIds && fileIds.length ? { fileIds } : {}) }); } catch (e) { console.warn(e); }
+  if (line) queueLine(`${icon} ${S.me.name}: ${text}${fileIds && fileIds.length ? ' 📎' : ''}`);
 }
 function sendLineNow(text) {
   const c = S.config || {};
@@ -105,22 +105,41 @@ async function compress(file) {
   }
   return out;
 }
-async function addPhoto(file, meta) {
-  const data = await compress(file);
+const MAX_FILE = 700 * 1024;
+function readDataUrl(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); }); }
+// แนบไฟล์เป็นหลักฐาน: รูปย่อให้เล็กลง, ไฟล์อื่น (PDF ฯลฯ) เก็บตามจริงไม่เกิน ~700 KB
+async function addFile(file, meta) {
+  let data, mime = file.type || 'application/octet-stream';
+  if (/^image\//.test(mime) && !/svg/.test(mime)) { try { data = await compress(file); mime = 'image/jpeg'; } catch (e) { data = null; } }
+  if (!data) { if (file.size > MAX_FILE) throw Object.assign(new Error('big'), { code: 'too-big' }); data = await readDataUrl(file); }
   const id = 'ph-' + Date.now().toString(36) + newId();
-  await put('photos/' + id, { data, at: Date.now(), byUid: S.me.uid, byName: S.me.name, ...meta });
-  S.photoCache[id] = data; return id;
+  await put('photos/' + id, { data, mime, name: String(file.name || 'file').slice(0, 120), size: file.size || 0, at: Date.now(), byUid: S.me.uid, byName: S.me.name, ...meta });
+  S.photoCache[id] = { data, mime, name: file.name }; return id;
 }
-const thumb = (id, big) => `<button class="thumb${big ? ' big' : ''}" data-act="photoView" data-id="${id}" aria-label="ดูรูป"><img data-pid="${id}" alt=""></button>`;
+const addPhoto = addFile;
+const CLIP = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.5l-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l9.2-9.2a3.7 3.7 0 0 1 5.2 5.2l-9.2 9.2a1.8 1.8 0 0 1-2.6-2.6l8.5-8.5"/></svg>';
+const ev = (n, soft) => n > 0 ? `<span class="ev on">${CLIP}${n > 1 ? ' ' + n : ''} มีหลักฐาน</span>` : (soft ? '' : '<span class="ev off">ไม่มีหลักฐาน</span>');
+const thumb = (id, big) => `<button class="thumb${big ? ' big' : ''}" data-act="photoView" data-id="${id}" aria-label="ดูไฟล์แนบ"><img data-pid="${id}" alt=""></button>`;
+const thumbs = ids => (ids || []).length ? `<div class="thumbs">${ids.map(id => thumb(id)).join('')}</div>` : '';
+async function getFile(id) {
+  if (S.photoCache[id] == null) { try { const s = await fb.getDoc(ref('photos/' + id)); S.photoCache[id] = s.exists() ? { data: s.data().data, mime: s.data().mime || 'image/jpeg', name: s.data().name || '' } : ''; } catch (e) { S.photoCache[id] = ''; } }
+  if (typeof S.photoCache[id] === 'string' && S.photoCache[id]) S.photoCache[id] = { data: S.photoCache[id], mime: 'image/jpeg', name: '' };
+  return S.photoCache[id];
+}
 async function hydratePhotos() {
   document.querySelectorAll('img[data-pid]').forEach(async img => {
-    if (img.getAttribute('src')) return;
-    const id = img.dataset.pid;
-    if (S.photoCache[id] == null) { try { const s = await fb.getDoc(ref('photos/' + id)); S.photoCache[id] = s.exists() ? s.data().data : ''; } catch (e) { S.photoCache[id] = ''; } }
-    if (S.photoCache[id]) img.src = S.photoCache[id]; else img.closest('.thumb')?.classList.add('gone');
+    if (img.getAttribute('src') || img.dataset.done) return; img.dataset.done = '1';
+    const f = await getFile(img.dataset.pid);
+    if (!f) { img.closest('.thumb')?.classList.add('gone'); return; }
+    if (/^image\//.test(f.mime)) img.src = f.data;
+    else { const b = img.closest('.thumb'); if (b) { b.classList.add('file'); b.innerHTML = `<span class="fname">${CLIP}<br>${esc((f.name || 'ไฟล์').slice(0, 18))}</span>`; } }
   });
 }
-const photoInput = (attrs, label) => `<label class="btn sm"><input type="file" accept="image/*" hidden ${attrs}>${label}</label>`;
+// ปุ่มแนบไฟล์: data-att="ชนิด|ค่า1|ค่า2"
+const attachBtn = (att, label = 'แนบหลักฐาน') => `<label class="btn sm attach">${CLIP} ${label}<input type="file" accept="image/*,application/pdf,.pdf,.heic,.doc,.docx,.xls,.xlsx,.txt" hidden data-att="${esc(att)}"></label>`;
+const photoInput = (attrs, label) => `<label class="btn sm attach">${CLIP} ${label}<input type="file" accept="image/*,application/pdf,.pdf" hidden ${attrs}></label>`;
+function mealEvidence(d, x) { return (x.fileIds || []).length + ((d.photos || {})[x.meal] || []).length; }
+function dayEvidence(ds) { const d = getDay(ds); const items = [...d.meals.map(x => mealEvidence(d, x) > 0), ...d.exercises.map(e => (e.fileIds || []).length > 0), ...workoutsOn(ds).map(w => (w.photoIds || []).length > 0)]; return { total: items.length, ok: items.filter(Boolean).length }; }
 
 /* ============ calculations ============ */
 const emptyDay = () => ({ meals: [], exercises: [], planDone: {}, note: '', water: 0, photos: {} });
@@ -249,13 +268,14 @@ function renderToday() {
   const own = isOwner();
   const ds = ui.date, d = getDay(ds), A = analyze(ds), tot = A.tot, m = A.m, remain = A.tgt - tot.kcal;
   const dow = dowOf(ds), pl = planOf(dow), isToday = ds === todayStr(), wos = workoutsOn(ds);
-  const exHtml = (d.exercises.length || wos.length) ? d.exercises.map(e => `<button class="item" ${own ? `data-act="editEx" data-id="${e.id}"` : 'disabled'}><span class="nm">${esc((EX[e.type] || EX.other).n)}${e.fromPlan ? ' <span class="tag">ตามแผน</span>' : ''}</span><span class="k">${fmt(exKcal(e))} kcal</span><span class="sub"><span>${r0(e.min)} นาที</span>${e.kcal != null && e.kcal !== '' ? '<span>kcal จากนาฬิกา</span>' : ''}${e.note ? `<span>${esc(e.note)}</span>` : ''}</span></button>`).join('') + wos.map(w => `<button class="item" data-act="tab" data-v="train"><span class="nm">🏋️ ${esc(w.title || 'เวทเทรนนิ่ง')} <span class="tag">บันทึกโดย ${esc(w.byName || '')}</span></span><span class="k">${fmt(exKcal({ type: 'weights', min: +w.min || 60 }))} kcal</span><span class="sub"><span>${esc(woSummary(w)).slice(0, 160)}</span></span></button>`).join('') : `<div class="empty">${pl.rest ? 'วันพักตามแผน' : 'ยังไม่ได้บันทึกการออกกำลังกาย'}</div>`;
+  const exHtml = (d.exercises.length || wos.length) ? d.exercises.map(e => `<button class="item" ${own ? `data-act="editEx" data-id="${e.id}"` : 'disabled'}><span class="nm">${esc((EX[e.type] || EX.other).n)}${e.fromPlan ? ' <span class="tag">ตามแผน</span>' : ''}</span><span class="k">${fmt(exKcal(e))} kcal</span><span class="sub"><span>${r0(e.min)} นาที</span>${e.kcal != null && e.kcal !== '' ? '<span>kcal จากนาฬิกา</span>' : ''}${e.note ? `<span>${esc(e.note)}</span>` : ''}${ev((e.fileIds || []).length)}</span></button>${thumbs(e.fileIds)}`).join('') + wos.map(w => `<button class="item" data-act="tab" data-v="train"><span class="nm">🏋️ ${esc(w.title || 'เวทเทรนนิ่ง')} <span class="tag">บันทึกโดย ${esc(w.byName || '')}</span></span><span class="k">${fmt(exKcal({ type: 'weights', min: +w.min || 60 }))} kcal</span><span class="sub"><span>${esc(woSummary(w)).slice(0, 160)}</span>${ev((w.photoIds || []).length)}</span></button>`).join('') : `<div class="empty">${pl.rest ? 'วันพักตามแผน' : 'ยังไม่ได้บันทึกการออกกำลังกาย'}</div>`;
   const mealsHtml = MEALS.map(ml => {
     const items = d.meals.filter(x => x.meal === ml); const sub = items.reduce((a, x) => a + (+x.kcal || 0), 0); const ph = (d.photos || {})[ml] || [];
-    return `<div class="meal-group"><div class="meal-h"><h4>${ml} <span class="muted num small">${items.length ? fmt(sub) + ' kcal' : ''}</span></h4>${own ? `<div class="row" style="gap:4px">${photoInput(`data-photo-meal="${ml}"`, 'แนบรูป')}<button class="btn sm link" data-act="addFood" data-meal="${ml}">+ เพิ่ม</button></div>` : ''}</div>
+    return `<div class="meal-group"><div class="meal-h"><h4>${ml} <span class="muted num small">${items.length ? fmt(sub) + ' kcal' : ''}</span></h4>${own ? `<div class="row" style="gap:4px">${attachBtn(`meal|${ds}|${ml}`, 'แนบรูปมื้อนี้')}<button class="btn sm link" data-act="addFood" data-meal="${ml}">+ เพิ่ม</button></div>` : ''}</div>
     ${ph.length ? `<div class="thumbs">${ph.map(id => thumb(id)).join('')}</div>` : ''}
-    ${items.map(x => `<button class="item" ${own ? `data-act="editMeal" data-id="${x.id}"` : 'disabled'}><span class="nm">${esc(x.name)}</span><span class="k">${fmt(x.kcal)}</span><span class="sub">${x.qty ? `<span>${esc(x.qty)}</span>` : ''}<span style="color:var(--pro)">P ${r1(x.p)}</span><span style="color:var(--carb)">C ${r1(x.c)}</span><span style="color:var(--fat)">F ${r1(x.f)}</span></span></button>`).join('')}</div>`;
+    ${items.map(x => `<button class="item" ${own ? `data-act="editMeal" data-id="${x.id}"` : 'disabled'}><span class="nm">${esc(x.name)}</span><span class="k">${fmt(x.kcal)}</span><span class="sub">${x.qty ? `<span>${esc(x.qty)}</span>` : ''}<span style="color:var(--pro)">P ${r1(x.p)}</span><span style="color:var(--carb)">C ${r1(x.c)}</span><span style="color:var(--fat)">F ${r1(x.f)}</span>${ev(mealEvidence(d, x))}</span></button>${thumbs(x.fileIds)}`).join('')}</div>`;
   }).join('');
+  const E = dayEvidence(ds);
   let planHtml;
   if (pl.rest) planHtml = `<p class="small">วันพักฟื้นตามแผน · ${esc(pl.title || '')}</p>`;
   else {
@@ -300,11 +320,12 @@ function renderToday() {
      <div class="card-h"><h3>น้ำดื่ม</h3><span class="num small muted">เป้า ${L_(waterTarget(ds))} ลิตร</span></div>
      <div class="row between" style="align-items:flex-end"><div class="hero-num num" style="font-size:32px">${L_(+d.water || 0)}<small>/ ${L_(waterTarget(ds))} ลิตร</small></div></div>
      ${bar(+d.water || 0, waterTarget(ds), 'var(--fat)')}
-     ${own ? `<div class="row"><button class="btn sm" data-act="water" data-v="250">+ 250 มล.</button><button class="btn sm" data-act="water" data-v="500">+ 500 มล.</button><button class="btn sm" data-act="water" data-v="1000">+ 1 ลิตร</button><button class="btn sm link" data-act="water" data-v="-250">− 250</button></div>` : ''}
+     ${own ? `<div class="row"><button class="btn sm" data-act="water" data-v="250">+ 250 มล.</button><button class="btn sm" data-act="water" data-v="500">+ 500 มล.</button><button class="btn sm" data-act="water" data-v="1000">+ 1 ลิตร</button><button class="btn sm link" data-act="water" data-v="-250">− 250</button>${attachBtn(`water|${ds}`, 'แนบรูป')}</div>` : ''}
+     ${thumbs(d.waterFiles)}
     </section>
     <section class="card"><div class="card-h"><h3>แผนวัน${TH_DOW[dow]}</h3><button class="btn sm link" data-act="tab" data-v="settings" data-set="plan">ดูแผน</button></div>${planHtml}</section>
     <section class="card"><div class="card-h"><h3>ออกกำลังกาย</h3>${own ? '<button class="btn sm" data-act="addEx">+ เพิ่ม</button>' : ''}</div>${exHtml}</section>
-    <section class="card"><div class="card-h"><h3>อาหาร</h3><span class="num small muted">${fmt(tot.kcal)} kcal</span></div>${mealsHtml}
+    <section class="card"><div class="card-h"><h3>อาหาร</h3><span class="num small muted">${fmt(tot.kcal)} kcal</span></div>${E.total ? `<p class="small ${E.ok === E.total ? 'ev-ok' : 'muted'}">${CLIP} หลักฐานวันนี้ ${E.ok}/${E.total} รายการ${E.ok < E.total ? ' · แนบรูปอาหาร ฉลาก ใบเสร็จ หรือหน้าจอนาฬิกา เพื่อยืนยันว่าทำจริง' : ' · ครบทุกรายการ'}</p>` : ''}${mealsHtml}
      <label class="f"><span>บันทึกสั้น ๆ (นอนกี่ชม. รู้สึกยังไง)</span><textarea id="dayNote" rows="2" ${RO()}>${esc(d.note || '')}</textarea></label>
     </section>
    </div>
@@ -322,8 +343,8 @@ function proteinCard(ds, A) {
 function feedCard() {
   const list = S.activity.slice(0, 12);
   return `<section class="card"><div class="card-h"><h3>ความเคลื่อนไหวในทีม</h3>${S.config.lineOn ? '<span class="pill plain">แจ้ง LINE อยู่</span>' : ''}</div>
-  <div class="row" style="flex-wrap:nowrap"><input id="msgText" placeholder="ส่งข้อความถึงทีม เช่น วันนี้ปวดเข่า ขอเบาขา"><button class="btn pri" data-act="sendMsg">ส่ง</button></div>
-  ${list.length ? `<ul class="feed">${list.map(a => `<li><span class="who">${esc(a.byName || '')}<span class="muted"> · ${ROLE_TH[a.byRole] || ''}</span></span><span class="txt">${esc(a.text)}</span><span class="when">${timeAgo(a.at)}</span></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีความเคลื่อนไหว</p>'}</section>`;
+  <div class="row" style="flex-wrap:nowrap"><input id="msgText" placeholder="ส่งข้อความถึงทีม เช่น วันนี้ปวดเข่า ขอเบาขา">${attachBtn('msg', '')}<button class="btn pri" data-act="sendMsg">ส่ง</button></div>${(ui.msgFiles || []).length ? `<p class="small muted">${CLIP} แนบแล้ว ${ui.msgFiles.length} ไฟล์ จะส่งไปกับข้อความ</p>` : ''}
+  ${list.length ? `<ul class="feed">${list.map(a => `<li><span class="who">${esc(a.byName || '')}<span class="muted"> · ${ROLE_TH[a.byRole] || ''}</span></span><span class="txt">${esc(a.text)}${thumbs(a.fileIds)}</span><span class="when">${timeAgo(a.at)}</span></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีความเคลื่อนไหว</p>'}</section>`;
 }
 
 /* ---------- train ---------- */
@@ -349,7 +370,7 @@ function renderTrain() {
    ${list.length ? list.map(w => `<div class="recipe">
     <div class="row between"><div><b>${thShort(w.date)}</b> · ${esc(w.title || '')}</div><span class="small muted">โดย ${esc(w.byName || '')}${w.min ? ` · ${w.min} นาที` : ''}</span></div>
     <div class="tbl-wrap"><table class="t"><tbody>${(w.exercises || []).filter(e => e.name).map(e => `<tr><td>${esc(e.name)}${e.note ? `<div class="xs muted">${esc(e.note)}</div>` : ''}</td><td class="n">${(e.sets || []).filter(s => +s.reps || +s.kg).map(s => (+s.kg ? `${s.kg}×` : '×') + (s.reps || '')).join(' · ')}</td></tr>`).join('')}</tbody></table></div>
-    <div class="row small muted" style="gap:12px"><span>ปริมาณรวม ${fmt(woVolume(w))} kg</span>${w.note ? `<span>${esc(w.note)}</span>` : ''}</div>
+    <div class="row small muted" style="gap:12px"><span>ปริมาณรวม ${fmt(woVolume(w))} kg</span>${ev((w.photoIds || []).length)}${w.note ? `<span>${esc(w.note)}</span>` : ''}</div>
     ${(w.photoIds || []).length ? `<div class="thumbs">${w.photoIds.map(id => thumb(id)).join('')}</div>` : ''}
     ${isTrainer() ? `<div class="row"><button class="btn sm" data-act="woEdit" data-id="${w.id}">แก้ไข</button><button class="btn sm link" data-act="woCopy" data-id="${w.id}">ใช้เป็นแม่แบบวันนี้</button></div>` : ''}
    </div>`).join('') : '<p class="empty">ยังไม่มีบันทึกการเทรน</p>'}
@@ -394,7 +415,7 @@ function woSheet() {
   </div>`).join('')}
   <button class="btn" data-act="woAddEx">+ เพิ่มท่า</button>
   <label class="f"><span>หมายเหตุจากเทรนเนอร์</span><textarea data-wo="note" rows="2">${esc(w.note || '')}</textarea></label>
-  <div class="row">${photoInput('data-photo-wo="1"', 'แนบรูป')}${(w.photoIds || []).length ? `<div class="thumbs">${w.photoIds.map(id => thumb(id)).join('')}</div>` : ''}</div>
+  <div class="row">${attachBtn('wo', 'แนบรูป/ไฟล์การเทรน')}${ev((w.photoIds || []).length)}</div>${thumbs(w.photoIds)}
   <div class="row between">${w.id ? `<button class="btn danger" data-act="woDel">ลบบันทึกนี้</button>` : '<span></span>'}<button class="btn pri" data-act="woSave">บันทึก</button></div>`);
 }
 function setPath(obj, path, val) { const ks = path.split('.'); let o = obj; for (let i = 0; i < ks.length - 1; i++) { const k = /^\d+$/.test(ks[i]) ? +ks[i] : ks[i]; o[k] = o[k] ?? (/^\d+$/.test(ks[i + 1]) ? [] : {}); o = o[k]; } o[/^\d+$/.test(ks[ks.length - 1]) ? +ks[ks.length - 1] : ks[ks.length - 1]] = val; }
@@ -419,7 +440,7 @@ function recipeBookHtml() {
     ${r.note ? `<p class="small muted" style="margin-top:6px">${esc(r.note)}</p>` : ''}
     ${(r.photoIds || []).length > 1 ? `<div class="thumbs">${r.photoIds.map(pid => thumb(pid)).join('')}</div>` : ''}
    </details>
-   ${own ? `<div class="row between"><div class="row" style="gap:6px"><select id="bkMeal_${id}" style="width:auto">${MEALS.map(x => `<option ${x === ((r.meals || []).includes(defaultMeal()) ? defaultMeal() : (r.meals || [defaultMeal()])[0]) ? 'selected' : ''}>${x}</option>`).join('')}</select><button class="btn sm pri" data-act="bookEat" data-id="${id}">กินเมนูนี้ · บันทึก</button></div><div class="row" style="gap:4px">${photoInput(`data-photo-recipe="${id}"`, 'เพิ่มรูปผลงาน')}<button class="btn sm link danger" data-act="bookDel" data-id="${id}">ลบ</button></div></div>` : ''}
+   ${own ? `<div class="row between"><div class="row" style="gap:6px"><select id="bkMeal_${id}" style="width:auto">${MEALS.map(x => `<option ${x === ((r.meals || []).includes(defaultMeal()) ? defaultMeal() : (r.meals || [defaultMeal()])[0]) ? 'selected' : ''}>${x}</option>`).join('')}</select><button class="btn sm pri" data-act="bookEat" data-id="${id}">กินเมนูนี้ · บันทึก</button></div><div class="row" style="gap:4px">${attachBtn(`recipe|${id}`, 'เพิ่มรูปผลงาน')}<button class="btn sm link danger" data-act="bookDel" data-id="${id}">ลบ</button></div></div>` : ''}
   </div>`).join('')}</div>` : `<p class="empty">${count('all') ? 'ไม่มีเมนูของมื้อนี้' : 'ยังไม่มีเมนูในสมุด'}</p>`}</section>`;
 }
 function pantryHtml() {
@@ -431,8 +452,8 @@ function pantryHtml() {
   ${soon && !buy.length ? `<p class="small muted">ของที่จะหมดก่อน: ${esc(soon.it.name)} ราว ${thShort(soon.st.runOut)} · ควรไปตลาดก่อนวันนั้น</p>` : ''}
   ${list.length ? list.map(({ id, it, st }) => `<div class="choice" style="flex-direction:column;align-items:stretch">
    <div class="row between"><div><b>${esc(it.name)}</b> <span class="num">${fmtQty(it.qty, it.unit)}</span></div>${st.out ? '<span class="pill adjust">หมด</span>' : st.low ? '<span class="pill ok">ใกล้หมด</span>' : st.days != null ? `<span class="pill plain">อีก ~${Math.floor(st.days)} วัน</span>` : '<span class="pill plain">ยังไม่มีสถิติ</span>'}</div>
-   <div class="small muted">${st.avg ? `ใช้เฉลี่ย ${fmtQty(r1(st.avg), it.unit)}/วัน${+it.perDay > 0 ? ' (ตั้งเอง)' : ''}` : 'ใช้ไปแล้วแอปจะคำนวณวันหมดให้'}${st.runOut ? ` · หมดราว ${thShort(st.runOut)}` : ''}</div>
-   ${own ? `<div class="row" style="gap:6px"><input type="number" inputmode="decimal" id="pq_${id}" placeholder="จำนวน" style="width:90px"><span class="small muted">${esc(it.unit)}</span><button class="btn sm" data-act="pUse" data-id="${id}">ใช้ไป</button><button class="btn sm" data-act="pAdd" data-id="${id}">เติม</button><button class="btn sm link" data-act="pEdit" data-id="${id}">แก้ไข</button></div>` : ''}
+   ${thumbs(it.fileIds)}<div class="small muted">${st.avg ? `ใช้เฉลี่ย ${fmtQty(r1(st.avg), it.unit)}/วัน${+it.perDay > 0 ? ' (ตั้งเอง)' : ''}` : 'ใช้ไปแล้วแอปจะคำนวณวันหมดให้'}${st.runOut ? ` · หมดราว ${thShort(st.runOut)}` : ''}</div>
+   ${own ? `<div class="row" style="gap:6px"><input type="number" inputmode="decimal" id="pq_${id}" placeholder="จำนวน" style="width:90px"><span class="small muted">${esc(it.unit)}</span><button class="btn sm" data-act="pUse" data-id="${id}">ใช้ไป</button><button class="btn sm" data-act="pAdd" data-id="${id}">เติม</button><button class="btn sm link" data-act="pEdit" data-id="${id}">แก้ไข</button>${attachBtn(`pantry|${id}`, 'ใบเสร็จ/รูป')}</div>` : ''}
   </div>`).join('') : '<p class="empty">ยังไม่มีของในคลัง</p>'}
   ${own ? `<details><summary>เพิ่มวัตถุดิบ</summary><div class="fields">
    <label class="f" style="grid-column:1/-1"><span>ชื่อ</span><input id="pn_name" placeholder="เช่น ไข่ไก่, ปลาช่อนแช่แข็ง"></label>
@@ -440,7 +461,7 @@ function pantryHtml() {
    <label class="f"><span>หน่วย</span><select id="pn_unit">${PUNITS.map(u => `<option>${u}</option>`).join('')}</select></label>
    <label class="f"><span>ใช้ต่อวัน (ถ้ารู้)</span><input type="number" inputmode="decimal" id="pn_per"></label>
    <label class="f"><span>เตือนเมื่อเหลือไม่ถึง (วัน)</span><input type="number" id="pn_low" value="2"></label>
-  </div><div class="row" style="margin-top:10px"><button class="btn pri" data-act="pNew">เพิ่มเข้าคลัง</button></div></details>` : ''}</section>`;
+  </div><div class="row" style="margin-top:10px">${attachBtn('pnew', 'แนบรูปของ/ใบเสร็จ')}<button class="btn pri" data-act="pNew">เพิ่มเข้าคลัง</button></div>${(ui.pnFiles || []).length ? `<p class="small muted">${CLIP} แนบแล้ว ${ui.pnFiles.length} ไฟล์</p>` : ''}</details>` : ''}</section>`;
 }
 function genMenu(tgt, seed) {
   const pick = (arr, k) => arr[(seed + k) % arr.length];
@@ -514,7 +535,7 @@ function renderBody() {
    <details><summary>สัดส่วนร่างกาย (สายวัด)</summary><div class="seg" style="margin-bottom:10px"><button aria-pressed="${ui.measUnit !== 'in'}" data-act="measUnit" data-v="cm">cm</button><button aria-pressed="${ui.measUnit === 'in'}" data-act="measUnit" data-v="in">นิ้ว (แปลงให้)</button></div>
     <div class="fields">${CIRC.map(([k, l]) => `<label class="f"><span>${l} ${ui.measUnit === 'in' ? 'นิ้ว' : 'cm'}</span><input type="number" step="0.1" inputmode="decimal" id="m_${k}"></label>`).join('')}</div></details>
    <label class="f"><span>หมายเหตุ</span><input id="m_note"></label>
-   <div class="row">${photoInput('id="m_photo"', 'แนบรูปใบผลวัด')}<button class="btn pri" data-act="measSave">บันทึกผลวัด</button></div>
+   <div class="row">${attachBtn('meas', 'แนบใบผลวัด (รูป/PDF)')}<button class="btn pri" data-act="measSave">บันทึกผลวัด</button></div>${(ui.measFiles || []).length ? `<p class="small muted">${CLIP} แนบแล้ว ${ui.measFiles.length} ไฟล์</p>` : '<p class="xs muted">แนบใบ InBody หรือรูปสายวัด เพื่อยืนยันตัวเลข</p>'}
   </section>` : ''}
   <section class="card"><div class="card-h"><h2>สัดส่วนร่างกาย</h2><span class="small muted">cm · (นิ้ว)</span></div>
    ${CIRC.some(([k]) => lastRec(k)) ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>จุดวัด</th><th class="n">ล่าสุด</th><th class="n">ครั้งแรก</th><th class="n">เปลี่ยน</th></tr></thead><tbody>${CIRC.map(([k, l]) => { const a = lastRec(k), f0 = firstVal(k); if (!a) return ''; const dv = f0 && f0.d !== a.d ? r1(a.v - f0.v) : null; return `<tr><td>${l}</td><td class="n">${r1(a.v)} <span class="muted">(${r1(a.v / 2.54)}")</span></td><td class="n">${f0 ? r1(f0.v) : '–'}</td><td class="n" style="color:${dv == null ? 'var(--muted)' : dv < 0 ? 'var(--good)' : dv > 0 ? 'var(--warn)' : 'var(--muted)'}">${dv == null ? '–' : (dv > 0 ? '+' : '') + dv}</td></tr>`; }).join('')}</tbody></table></div>` : '<p class="empty">ยังไม่มีข้อมูลสัดส่วน</p>'}
@@ -523,7 +544,7 @@ function renderBody() {
    <div class="trend"><span class="eyebrow">น้ำหนัก kg</span>${trendSvg('weight', null)}</div><div class="trend"><span class="eyebrow">มวลกล้ามเนื้อ kg</span>${trendSvg('smm', +t.smmTarget || null)}</div>
    <div class="trend"><span class="eyebrow">ไขมัน %</span>${trendSvg('fatPct', +t.fatTarget || null)}</div><div class="trend"><span class="eyebrow">รอบเอว cm</span>${trendSvg('waist', null)}</div></div></section>
   <section class="card"><h2>ประวัติผลวัด</h2>${ms.length ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>วันที่</th><th class="n">น้ำหนัก</th><th class="n">SMM</th><th class="n">ไขมัน %</th><th class="n">BMR</th><th class="n">เอว</th><th class="n">สะโพก</th><th></th></tr></thead><tbody>
-   ${[...ms].reverse().map(m => `<tr><td>${thShort(m.date)}${m.photoId ? ' ' + thumb(m.photoId) : ''}</td><td class="n">${m.weight ?? '–'}</td><td class="n">${m.smm ?? '–'}</td><td class="n">${fatPctOf(m) != null ? r1(fatPctOf(m)) : '–'}</td><td class="n">${m.bmr ?? '–'}</td><td class="n">${m.waist ?? '–'}</td><td class="n">${m.hip ?? '–'}</td><td>${own ? `<button class="btn sm link danger" data-act="measDel" data-date="${m.date}">ลบ</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">ยังไม่มีผลวัด</p>'}</section></div>`;
+   ${[...ms].reverse().map(m => `<tr><td>${thShort(m.date)} ${ev([...(m.fileIds || []), ...(m.photoId ? [m.photoId] : [])].length)}${thumbs([...(m.fileIds || []), ...(m.photoId ? [m.photoId] : [])])}</td><td class="n">${m.weight ?? '–'}</td><td class="n">${m.smm ?? '–'}</td><td class="n">${fatPctOf(m) != null ? r1(fatPctOf(m)) : '–'}</td><td class="n">${m.bmr ?? '–'}</td><td class="n">${m.waist ?? '–'}</td><td class="n">${m.hip ?? '–'}</td><td>${own ? `<button class="btn sm link danger" data-act="measDel" data-date="${m.date}">ลบ</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : '<p class="empty">ยังไม่มีผลวัด</p>'}</section></div>`;
 }
 
 /* ---------- overview ---------- */
@@ -539,8 +560,8 @@ function renderOverview() {
   <div class="row small muted" style="gap:14px"><span><span class="dot" style="background:var(--accent)"></span> ขาดดุล</span><span><span class="dot" style="background:var(--pro)"></span> เกินดุล</span><span><span class="dot" style="background:var(--good)"></span> โปรตีนถึงเป้า</span></div>
   <div class="tbl-wrap">${svg}</div>
   <div class="stats"><div class="stat"><div class="v num">${Lg.length}/${N}</div><div class="l">วันที่บันทึก</div></div><div class="stat"><div class="v num">${fmt(avg(r => r.tot.kcal))}</div><div class="l">กินเฉลี่ย kcal</div></div><div class="stat"><div class="v num">${fmt(avg(r => r.tot.p))}</div><div class="l">โปรตีนเฉลี่ย g</div></div><div class="stat"><div class="v num">${r0(avg(r => r.tgtP - r.tot.p))}</div><div class="l">โปรตีนขาดเฉลี่ย g/วัน</div></div><div class="stat"><div class="v num">${rows.reduce((a, r) => a + r.wo, 0)}</div><div class="l">ครั้งที่เทรน</div></div><div class="stat"><div class="v num">${sumNet < 0 ? '−' : '+'}${r1(Math.abs(sumNet) / 7700)}</div><div class="l">ไขมันเปลี่ยนโดยประมาณ kg</div></div></div></section>
-  <section class="card"><h2>รายวัน</h2><div class="tbl-wrap"><table class="t"><thead><tr><th>วัน</th><th class="n">กิน</th><th class="n">ออกกำลัง</th><th class="n">สุทธิ</th><th class="n">โปรตีน</th><th class="n">น้ำ ล.</th><th class="n">เทรน</th><th></th></tr></thead><tbody>
-  ${[...rows].reverse().map(r => `<tr><td>${thShort(r.ds)}</td><td class="n">${r.logged ? fmt(r.tot.kcal) : '–'}</td><td class="n">${r.bK ? fmt(r.bK) : '–'}</td><td class="n" style="color:${r.net == null ? 'var(--muted)' : r.net < 0 ? 'var(--accent)' : 'var(--pro)'}">${r.net == null ? '–' : (r.net > 0 ? '+' : '') + fmt(r.net)}</td><td class="n">${r.logged ? r0(r.tot.p) + '/' + r0(r.tgtP) : '–'}</td><td class="n">${r.water ? L_(r.water) : '–'}</td><td class="n">${r.wo || '–'}</td><td><button class="btn sm link" data-act="gotoDay" data-date="${r.ds}">เปิด</button></td></tr>`).join('')}</tbody></table></div></section></div>`;
+  <section class="card"><h2>รายวัน</h2><div class="tbl-wrap"><table class="t"><thead><tr><th>วัน</th><th class="n">กิน</th><th class="n">ออกกำลัง</th><th class="n">สุทธิ</th><th class="n">โปรตีน</th><th class="n">น้ำ ล.</th><th class="n">เทรน</th><th class="n">หลักฐาน</th><th></th></tr></thead><tbody>
+  ${[...rows].reverse().map(r => `<tr><td>${thShort(r.ds)}</td><td class="n">${r.logged ? fmt(r.tot.kcal) : '–'}</td><td class="n">${r.bK ? fmt(r.bK) : '–'}</td><td class="n" style="color:${r.net == null ? 'var(--muted)' : r.net < 0 ? 'var(--accent)' : 'var(--pro)'}">${r.net == null ? '–' : (r.net > 0 ? '+' : '') + fmt(r.net)}</td><td class="n">${r.logged ? r0(r.tot.p) + '/' + r0(r.tgtP) : '–'}</td><td class="n">${r.water ? L_(r.water) : '–'}</td><td class="n">${r.wo || '–'}</td><td class="n">${(E => E.total ? E.ok + '/' + E.total : '–')(dayEvidence(r.ds))}</td><td><button class="btn sm link" data-act="gotoDay" data-date="${r.ds}">เปิด</button></td></tr>`).join('')}</tbody></table></div></section></div>`;
 }
 
 /* ---------- settings ---------- */
@@ -620,6 +641,8 @@ function foodSheet() {
   const rows = FOODS.map(f => { const v = foodVal(f, f.d); return `<div class="food-row" data-name="${esc((f.n + ' ' + f.cat).toLowerCase())}"><div><div class="nm">${esc(f.n)}</div><div class="meta"><span class="fk" data-id="${f.id}">${fmt(v.kcal)} kcal · P ${r1(v.p)}</span> · ${f.u === 'g' ? 'กรัม' : esc(f.un)}</div></div><input type="number" class="fq" data-id="${f.id}" step="${f.u === 'g' ? 10 : 0.5}" value="${f.d}"><button class="btn sm" data-act="addFoodLib" data-id="${f.id}">เพิ่ม</button></div>`; }).join('');
   openSheet(`<div class="sheet-h"><h3>เพิ่มอาหาร · ${thShort(ui.date)}</h3><button class="btn sm" data-act="close">ปิด</button></div>
   <div class="seg" id="fsMeal">${MEALS.map(m => `<button aria-pressed="${ui.fsMeal === m}" data-act="fsMeal" data-v="${m}">${m}</button>`).join('')}</div>
+  <div class="choice"><div class="small">${CLIP} <b>หลักฐานของรายการที่จะเพิ่ม</b><br><span class="muted">รูปอาหาร ฉลาก หรือใบเสร็จ แนบก่อนกดเพิ่ม ทุกรายการในหน้านี้จะอ้างอิงไฟล์เดียวกัน</span></div>${attachBtn('add', 'แนบ')}</div>
+  <div id="addFilesBox">${thumbs(ui.addFiles)}</div>
   <input id="fsSearch" placeholder="ค้นหา เช่น ไข่ ปลา กุ้ง โยเกิร์ต ข้าว"><div class="flist">${rows}</div>
   <details open><summary>กรอกเอง</summary><div class="fields">
    <label class="f" style="grid-column:1/-1"><span>ชื่ออาหาร</span><input id="mf_name"></label><label class="f"><span>ปริมาณ</span><input id="mf_qty" placeholder="1 จาน"></label>
@@ -633,6 +656,7 @@ function editMealSheet(id) {
    <label class="f"><span>มื้อ</span><select id="e_meal">${MEALS.map(m => `<option ${m === x.meal ? 'selected' : ''}>${m}</option>`).join('')}</select></label><label class="f"><span>ปริมาณ</span><input id="e_qty" value="${esc(x.qty)}"></label>
    <label class="f" style="grid-column:1/-1"><span>${+x.g > 0 ? 'น้ำหนัก (กรัม) · แก้แล้วคำนวณใหม่ให้' : 'ปริมาณเทียบของเดิม (เท่า)'}</span><input type="number" id="e_amt" inputmode="decimal" step="${+x.g > 0 ? 10 : 0.25}" value="${+x.g > 0 ? x.g : 1}" data-hasg="${+x.g > 0 ? 1 : 0}" data-base="${+x.g > 0 ? x.g : 1}" data-k="${esc(x.kcal)}" data-p="${esc(x.p)}" data-c="${esc(x.c)}" data-f="${esc(x.f)}" data-qty="${esc(x.qty)}"></label>
    <label class="f"><span>kcal</span><input type="number" id="e_kcal" value="${esc(x.kcal)}"></label><label class="f"><span>โปรตีน g</span><input type="number" step="0.1" id="e_p" value="${esc(x.p)}"></label><label class="f"><span>คาร์บ g</span><input type="number" step="0.1" id="e_c" value="${esc(x.c)}"></label><label class="f"><span>ไขมัน g</span><input type="number" step="0.1" id="e_f" value="${esc(x.f)}"></label></div>
+  <div class="row">${attachBtn(`mealItem|${ui.date}|${id}`, 'แนบหลักฐานรายการนี้')}${ev(mealEvidence(getDay(ui.date), x))}</div>${thumbs(x.fileIds)}
   <div class="row between"><button class="btn danger" data-act="delMeal" data-id="${id}">ลบรายการ</button><button class="btn pri" data-act="saveMeal" data-id="${id}">บันทึก</button></div>`);
 }
 function exSheet(id) {
@@ -641,12 +665,14 @@ function exSheet(id) {
    <label class="f" style="grid-column:1/-1"><span>ประเภท</span><select id="x_type">${Object.entries(EX).map(([k, v]) => `<option value="${k}" ${k === x.type ? 'selected' : ''}>${v.n}</option>`).join('')}</select></label>
    <label class="f"><span>นาที</span><input type="number" id="x_min" value="${esc(x.min)}"></label><label class="f"><span>kcal จากนาฬิกา (ถ้ามี)</span><input type="number" id="x_kcal" value="${esc(x.kcal ?? '')}"></label>
    <label class="f" style="grid-column:1/-1"><span>หมายเหตุ</span><input id="x_note" value="${esc(x.note || '')}"></label></div>
+  <div class="row">${attachBtn(id ? `ex|${ui.date}|${id}` : 'exnew', 'แนบหน้าจอนาฬิกา/รูป')}${ev(id ? (x.fileIds || []).length : (ui.exFiles || []).length)}</div>${thumbs(id ? x.fileIds : ui.exFiles)}
   <div class="row between">${id ? `<button class="btn danger" data-act="delEx" data-id="${id}">ลบ</button>` : '<span></span>'}<button class="btn pri" data-act="saveEx" data-id="${id || ''}">บันทึก</button></div>`);
 }
 function pasteSheet() {
   openSheet(`<div class="sheet-h"><h3>วางจากอินัง</h3><button class="btn sm" data-act="close">ปิด</button></div>
   <p class="small muted">ก๊อปข้อความที่ขึ้นต้นด้วย <b>FIT1</b> จากแชตกับอินัง แล้ววางด้านล่าง</p>
   <textarea id="pasteText" rows="6" placeholder="FIT1 {…}"></textarea>
+  <div class="choice"><div class="small">${CLIP} <b>แนบหลักฐาน</b> <span class="muted">รูปอาหารหรือหน้าจอนาฬิกาที่ส่งให้อินัง จะผูกกับทุกรายการที่นำเข้า</span></div>${attachBtn('add', 'แนบ')}</div><div id="addFilesBox">${thumbs(ui.addFiles)}</div>
   <div class="row"><button class="btn" data-act="pastePreview">ตรวจสอบ</button><button class="btn pri" data-act="pasteApply" ${ui.pasted ? '' : 'disabled'}>นำเข้า</button></div><div id="pasteOut">${ui.pasted ? pastePreviewHtml(ui.pasted) : ''}</div>`);
 }
 function parsePaste(txt) { const i = txt.indexOf('FIT1'); if (i < 0) throw new Error('ไม่พบคำว่า FIT1'); const a = txt.indexOf('{', i), b = txt.lastIndexOf('}'); if (a < 0 || b < a) throw new Error('รูปแบบข้อมูลไม่ครบ'); return JSON.parse(txt.slice(a, b + 1)); }
@@ -663,8 +689,8 @@ function pastePreviewHtml(o) {
 }
 async function applyPaste(o) {
   const ds = o.date || ui.date; const d = ensureDay(ds); const parts = [];
-  (o.meals || []).forEach(m => d.meals.push({ id: newId(), meal: MEALS.includes(m.meal) ? m.meal : defaultMeal(), name: String(m.name || 'อาหาร'), qty: String(m.qty || ''), g: +m.g > 0 ? +m.g : null, kcal: r0(m.kcal), p: r1(m.p), c: r1(m.c), f: r1(m.f) }));
-  (o.exercises || []).forEach(e => d.exercises.push({ id: newId(), type: EX[e.type] ? e.type : 'other', min: +e.min || 0, kcal: e.kcal ?? null, note: String(e.note || '') }));
+  (o.meals || []).forEach(m => d.meals.push({ id: newId(), meal: MEALS.includes(m.meal) ? m.meal : defaultMeal(), name: String(m.name || 'อาหาร'), qty: String(m.qty || ''), g: +m.g > 0 ? +m.g : null, kcal: r0(m.kcal), p: r1(m.p), c: r1(m.c), f: r1(m.f), fileIds: [...(ui.addFiles || [])] }));
+  (o.exercises || []).forEach(e => d.exercises.push({ id: newId(), type: EX[e.type] ? e.type : 'other', min: +e.min || 0, kcal: e.kcal ?? null, note: String(e.note || ''), fileIds: [...(ui.addFiles || [])] }));
   if (o.water) d.water = Math.max(0, (+d.water || 0) + (+o.water || 0));
   saveDay(ds);
   if (o.meals?.length) parts.push(`บันทึกอาหาร ${[...new Set(o.meals.map(m => m.meal))].join('/')}: ${o.meals.map(m => m.name).join(', ')} (${fmt(o.meals.reduce((a, m) => a + (+m.kcal || 0), 0))} kcal · P${r0(o.meals.reduce((a, m) => a + (+m.p || 0), 0))})`);
@@ -690,7 +716,7 @@ function trainerDayText(ds) {
   MEALS.forEach(ml => { const it = d.meals.filter(x => x.meal === ml); L.push(`${ml}: ${it.length ? it.map(x => `${x.name}${x.qty ? ' ' + x.qty : ''} (${fmt(x.kcal)})`).join(' · ') : '-'}`); });
   L.push(''); L.push(`ออกกำลังกาย: ${d.exercises.length ? d.exercises.map(e => `${(EX[e.type] || EX.other).n} ${r0(e.min)} นาที`).join(' · ') : 'ไม่มี'}`);
   workoutsOn(ds).forEach(w => L.push(`เทรน ${w.title}: ${woSummary(w)}`));
-  L.push(`น้ำดื่ม: ${L_(+d.water || 0)} / ${L_(waterTarget(ds))} ลิตร`); if (d.note) L.push(`หมายเหตุ: ${d.note}`);
+  L.push(`น้ำดื่ม: ${L_(+d.water || 0)} / ${L_(waterTarget(ds))} ลิตร`); const E = dayEvidence(ds); if (E.total) L.push(`หลักฐานแนบ: ${E.ok}/${E.total} รายการ`); if (d.note) L.push(`หมายเหตุ: ${d.note}`);
   return L.join('\n');
 }
 function trainerWeekText() {
@@ -706,7 +732,7 @@ async function copyText(txt) { const box = $('#shareOut'); try { await navigator
 function addMealItems(ds, items, meal) {
   const d = ensureDay(ds); items.forEach(x => d.meals.push({ id: newId(), meal: meal || x.meal, ...x, meal: meal || x.meal })); saveDay(ds);
   const k = items.reduce((a, x) => a + (+x.kcal || 0), 0), p = items.reduce((a, x) => a + (+x.p || 0), 0);
-  logAct('food', `บันทึกมื้อ${meal || items[0].meal}${ds !== todayStr() ? ` (${thShort(ds)})` : ''}: ${items.map(x => `${x.name}${x.qty ? ' ' + x.qty : ''}`).join(', ')} · ${fmt(k)} kcal · P${r0(p)}`);
+  const hasEv = items.some(x => (x.fileIds || []).length); logAct('food', `บันทึกมื้อ${meal || items[0].meal}${ds !== todayStr() ? ` (${thShort(ds)})` : ''}: ${items.map(x => `${x.name}${x.qty ? ' ' + x.qty : ''}`).join(', ')} · ${fmt(k)} kcal · P${r0(p)}${hasEv ? ' · มีหลักฐานแนบ' : ''}`);
   render();
 }
 const readNum = id => num($(id)?.value);
@@ -726,26 +752,26 @@ document.addEventListener('click', async e => {
     case 'dToday': ui.date = todayStr(); render(); break;
     case 'gotoDay': ui.date = a.dataset.date; ui.tab = 'today'; render(); window.scrollTo(0, 0); break;
     case 'startDefault': S.profileDoc = defaultProfileDoc(); S.plan = defaultPlan(); saveProfile(); savePlan(); render(); break;
-    case 'addFood': ui.fsMeal = a.dataset.meal || defaultMeal(); foodSheet(); break;
+    case 'addFood': ui.fsMeal = a.dataset.meal || defaultMeal(); ui.addFiles = []; foodSheet(); break;
     case 'fsMeal': ui.fsMeal = a.dataset.v; document.querySelectorAll('#fsMeal button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === ui.fsMeal)); break;
-    case 'addFoodLib': { const f = FOOD[a.dataset.id]; const q = num(document.querySelector(`.fq[data-id="${f.id}"]`).value) || f.d; const v = foodVal(f, q); addMealItems(ui.date, [{ name: f.n, qty: qtyText(f, q), g: f.u === 'g' ? r0(q) : null, kcal: r0(v.kcal), p: r1(v.p), c: r1(v.c), f: r1(v.f) }], ui.fsMeal); toast(`เพิ่ม ${f.n} แล้ว`); break; }
+    case 'addFoodLib': { const f = FOOD[a.dataset.id]; const q = num(document.querySelector(`.fq[data-id="${f.id}"]`).value) || f.d; const v = foodVal(f, q); addMealItems(ui.date, [{ name: f.n, qty: qtyText(f, q), g: f.u === 'g' ? r0(q) : null, kcal: r0(v.kcal), p: r1(v.p), c: r1(v.c), f: r1(v.f), fileIds: [...(ui.addFiles || [])] }], ui.fsMeal); toast(`เพิ่ม ${f.n} แล้ว`); break; }
     case 'mfCalc': $('#mf_kcal').value = r0((readNum('#mf_p') || 0) * 4 + (readNum('#mf_c') || 0) * 4 + (readNum('#mf_f') || 0) * 9); break;
-    case 'mfAdd': { const name = $('#mf_name').value.trim(); if (!name) { toast('ใส่ชื่ออาหารก่อน'); break; } const p = readNum('#mf_p') || 0, c = readNum('#mf_c') || 0, f = readNum('#mf_f') || 0; let k = readNum('#mf_kcal'); if (k == null) k = p * 4 + c * 4 + f * 9; addMealItems(ui.date, [{ name, qty: $('#mf_qty').value.trim(), kcal: r0(k), p: r1(p), c: r1(c), f: r1(f) }], ui.fsMeal); ['#mf_name', '#mf_qty', '#mf_kcal', '#mf_p', '#mf_c', '#mf_f'].forEach(s => $(s).value = ''); toast(`เพิ่ม ${name} แล้ว`); break; }
+    case 'mfAdd': { const name = $('#mf_name').value.trim(); if (!name) { toast('ใส่ชื่ออาหารก่อน'); break; } const p = readNum('#mf_p') || 0, c = readNum('#mf_c') || 0, f = readNum('#mf_f') || 0; let k = readNum('#mf_kcal'); if (k == null) k = p * 4 + c * 4 + f * 9; addMealItems(ui.date, [{ name, qty: $('#mf_qty').value.trim(), kcal: r0(k), p: r1(p), c: r1(c), f: r1(f), fileIds: [...(ui.addFiles || [])] }], ui.fsMeal); ['#mf_name', '#mf_qty', '#mf_kcal', '#mf_p', '#mf_c', '#mf_f'].forEach(s => $(s).value = ''); toast(`เพิ่ม ${name} แล้ว`); break; }
     case 'editMeal': editMealSheet(a.dataset.id); break;
     case 'saveMeal': { const id = a.dataset.id, ds = ui.date, am = $('#e_amt'); const v = { name: $('#e_name').value.trim() || 'อาหาร', meal: $('#e_meal').value, qty: $('#e_qty').value.trim(), kcal: r0(readNum('#e_kcal') || 0), p: r1(readNum('#e_p') || 0), c: r1(readNum('#e_c') || 0), f: r1(readNum('#e_f') || 0) }; if (am && am.dataset.hasg === '1' && num(am.value) > 0) v.g = r0(num(am.value)); mut(() => { const x = ensureDay(ds).meals.find(m => m.id === id); if (x) Object.assign(x, v); }, { day: ds }); closeSheet(); break; }
     case 'delMeal': { const id = a.dataset.id, ds = ui.date; mut(() => { const d = ensureDay(ds); d.meals = d.meals.filter(m => m.id !== id); }, { day: ds }); closeSheet(); break; }
-    case 'addEx': exSheet(null); break;
+    case 'addEx': ui.exFiles = []; exSheet(null); break;
     case 'editEx': exSheet(a.dataset.id); break;
-    case 'saveEx': { const id = a.dataset.id, ds = ui.date; const v = { type: $('#x_type').value, min: readNum('#x_min') || 0, kcal: readNum('#x_kcal'), note: $('#x_note').value.trim() }; mut(() => { const d = ensureDay(ds); if (id) Object.assign(d.exercises.find(e => e.id === id) || {}, v); else d.exercises.push({ id: newId(), ...v }); }, { day: ds }); if (!id) logAct('ex', `ออกกำลังกาย: ${(EX[v.type] || EX.other).n} ${v.min} นาที ~${fmt(exKcal(v))} kcal`); closeSheet(); break; }
+    case 'saveEx': { const id = a.dataset.id, ds = ui.date; const v = { type: $('#x_type').value, min: readNum('#x_min') || 0, kcal: readNum('#x_kcal'), note: $('#x_note').value.trim() }; mut(() => { const d = ensureDay(ds); if (id) Object.assign(d.exercises.find(e => e.id === id) || {}, v); else d.exercises.push({ id: newId(), ...v, fileIds: [...(ui.exFiles || [])] }); }, { day: ds }); if (!id) logAct('ex', `ออกกำลังกาย: ${(EX[v.type] || EX.other).n} ${v.min} นาที ~${fmt(exKcal(v))} kcal${(ui.exFiles || []).length ? ' · มีหลักฐานแนบ' : ''}`); ui.exFiles = []; closeSheet(); break; }
     case 'delEx': { const id = a.dataset.id, ds = ui.date; mut(() => { const d = ensureDay(ds); d.exercises = d.exercises.filter(x => x.id !== id); }, { day: ds }); closeSheet(); break; }
     case 'planCardio': { const ds = ui.date, pl = planOf(dowOf(ds)); mut(() => ensureDay(ds).exercises.push({ id: newId(), type: pl.cardio.type, min: +pl.cardio.min, kcal: null, note: '', fromPlan: 'cardio' }), { day: ds }); logAct('ex', `ทำคาร์ดิโอตามแผน: ${EX[pl.cardio.type]?.n} ${pl.cardio.min} นาที`); break; }
     case 'water': { const ds = ui.date, v = +a.dataset.v; mut(() => { const d = ensureDay(ds); d.water = Math.max(0, (+d.water || 0) + v); }, { day: ds }); break; }
     case 'protAdd': { const pl = ui.protPlans[+a.dataset.i]; if (pl) addMealItems(ui.date, pl.items, lateNow(ui.date) || nowHour() >= 14 ? (nowHour() >= 17 && !lateNow(ui.date) ? 'เย็น' : 'ว่าง') : nowHour() < 10 ? 'เช้า' : 'กลางวัน'); break; }
-    case 'sendMsg': { const t = $('#msgText').value.trim(); if (!t) break; $('#msgText').value = ''; await logAct('msg', t); toast('ส่งแล้ว'); break; }
+    case 'sendMsg': { const t = $('#msgText').value.trim(); const files = [...(ui.msgFiles || [])]; if (!t && !files.length) break; $('#msgText').value = ''; ui.msgFiles = []; await logAct('msg', (t || 'ส่งไฟล์แนบ') + (files.length ? ` (แนบ ${files.length} ไฟล์)` : ''), { fileIds: files }); toast('ส่งแล้ว'); render(); break; }
     case 'copyDay': copyText(trainerDayText(ui.date)); break;
     case 'copyWeek': copyText(trainerWeekText()); break;
     case 'lineDay': if (sendLineNow(trainerDayText(ui.date))) toast('ส่งสรุปเข้ากลุ่ม LINE แล้ว'); break;
-    case 'pasteOpen': ui.pasted = null; pasteSheet(); break;
+    case 'pasteOpen': ui.pasted = null; ui.addFiles = []; pasteSheet(); break;
     case 'pastePreview': try { ui.pasted = parsePaste($('#pasteText').value); $('#pasteOut').innerHTML = pastePreviewHtml(ui.pasted); document.querySelector('[data-act="pasteApply"]').disabled = false; } catch (err) { $('#pasteOut').innerHTML = `<p class="small" style="color:var(--bad)">${esc(err.message)} · ก๊อปข้อความจากอินังให้ครบทั้งก้อน</p>`; } break;
     case 'pasteApply': if (ui.pasted) { await applyPaste(ui.pasted); ui.pasted = null; closeSheet(); toast('นำเข้าแล้ว'); } break;
     // train
@@ -766,7 +792,10 @@ document.addEventListener('click', async e => {
     }
     case 'woDel': { const id = ui.wo.id; if (a.dataset.confirm !== '1') { a.dataset.confirm = '1'; a.textContent = 'กดอีกครั้งเพื่อยืนยันการลบ'; break; } await del('workouts/' + id); delete S.workouts[id]; closeSheet(); render(); break; }
     case 'progEx': ui.progEx = a.dataset.k; render(); break;
-    case 'photoView': { const id = a.dataset.id; openSheet(`<div class="sheet-h"><h3>รูปภาพ</h3><button class="btn sm" data-act="close">ปิด</button></div><img data-pid="${id}" alt="" style="width:100%;border-radius:12px">`); break; }
+    case 'photoView': { const id = a.dataset.id; const f = await getFile(id); if (!f) { toast('ไม่พบไฟล์'); break; }
+      if (/^image\//.test(f.mime)) openSheet(`<div class="sheet-h"><h3>ไฟล์แนบ</h3><button class="btn sm" data-act="close">ปิด</button></div><img src="${f.data}" alt="" style="width:100%;border-radius:12px">`);
+      else { const blob = await (await fetch(f.data)).blob(); const url = URL.createObjectURL(blob); openSheet(`<div class="sheet-h"><h3>ไฟล์แนบ</h3><button class="btn sm" data-act="close">ปิด</button></div><p>${esc(f.name || 'ไฟล์')}</p><div class="row"><a class="btn pri" href="${url}" target="_blank" rel="noopener">เปิดไฟล์</a><a class="btn" href="${url}" download="${esc(f.name || 'file')}">ดาวน์โหลด</a></div>`); }
+      break; }
     // kitchen
     case 'bookMeal': ui.bookMeal = a.dataset.v; render(); break;
     case 'bookEat': { const r = S.recipes[a.dataset.id]; if (!r) break; const meal = $('#bkMeal_' + a.dataset.id)?.value || defaultMeal(); const used = []; (r.uses || []).forEach(u => { const m = pantryFind(u.k, u.u); if (m) { pantryUse(m[0], +u.amt, ui.date); used.push(`${m[1].name} −${u.amt}${u.u === 'g' ? 'g' : ' ' + (u.u || '')}`); } }); addMealItems(ui.date, [{ name: r.name, qty: '1 ที่', kcal: r0(r.kcal), p: r1(r.p), c: r1(r.c), f: r1(r.f) }], meal); toast(`บันทึก ${r.name} แล้ว${used.length ? ' · ตัดคลัง: ' + used.join(', ') : ''}`); break; }
@@ -777,7 +806,7 @@ document.addEventListener('click', async e => {
     case 'menuNew': ui.menuSeed++; render(); break;
     case 'menuAdd': MEALS.forEach(ml => { const its = (ui.menu || []).filter(x => x.meal === ml); if (its.length) { const d = ensureDay(ui.date); its.forEach(x => d.meals.push({ id: newId(), ...x })); } }); saveDay(ui.date); logAct('food', `เพิ่มเมนูทั้งวันลงบันทึก ${thShort(ui.date)}`); render(); toast('เพิ่มแล้ว'); break;
     case 'pUse': case 'pAdd': { const id = a.dataset.id, v = num($('#pq_' + id)?.value); if (!(v > 0)) { toast('ใส่จำนวนก่อน'); break; } if (act === 'pUse') pantryUse(id, v, ui.date); else { const it = S.pantry[id]; it.qty = r1((+it.qty || 0) + v); savePantry(id, it); } render(); break; }
-    case 'pNew': { const name = $('#pn_name').value.trim(), q = num($('#pn_qty').value); if (!name || q == null) { toast('ใส่ชื่อและจำนวน'); break; } savePantry('p-' + newId(), { name, qty: q, unit: $('#pn_unit').value, perDay: num($('#pn_per').value) || 0, lowDays: num($('#pn_low').value) || 2, uses: [] }); logAct('pantry', `เพิ่ม ${name} ${q} ${$('#pn_unit').value} เข้าคลัง`, { line: false }); render(); break; }
+    case 'pNew': { const name = $('#pn_name').value.trim(), q = num($('#pn_qty').value); if (!name || q == null) { toast('ใส่ชื่อและจำนวน'); break; } savePantry('p-' + newId(), { name, qty: q, unit: $('#pn_unit').value, perDay: num($('#pn_per').value) || 0, lowDays: num($('#pn_low').value) || 2, uses: [], fileIds: [...(ui.pnFiles || [])] }); ui.pnFiles = []; logAct('pantry', `เพิ่ม ${name} ${q} ${$('#pn_unit').value} เข้าคลัง`, { line: false }); render(); break; }
     case 'pEdit': { const id = a.dataset.id, it = S.pantry[id]; openSheet(`<div class="sheet-h"><h3>แก้ไข ${esc(it.name)}</h3><button class="btn sm" data-act="close">ปิด</button></div><div class="fields"><label class="f" style="grid-column:1/-1"><span>ชื่อ</span><input id="pe_name" value="${esc(it.name)}"></label><label class="f"><span>คงเหลือ</span><input type="number" id="pe_qty" value="${esc(it.qty)}"></label><label class="f"><span>หน่วย</span><select id="pe_unit">${PUNITS.map(u => `<option ${u === it.unit ? 'selected' : ''}>${u}</option>`).join('')}</select></label><label class="f"><span>ใช้ต่อวัน</span><input type="number" id="pe_per" value="${esc(it.perDay || '')}"></label><label class="f"><span>เตือนเมื่อเหลือ (วัน)</span><input type="number" id="pe_low" value="${esc(it.lowDays || 2)}"></label></div><div class="row between"><button class="btn danger" data-act="pDel" data-id="${id}">ลบ</button><button class="btn pri" data-act="pSave" data-id="${id}">บันทึก</button></div>`); break; }
     case 'pSave': { const id = a.dataset.id, it = S.pantry[id]; Object.assign(it, { name: $('#pe_name').value.trim() || it.name, qty: num($('#pe_qty').value) ?? it.qty, unit: $('#pe_unit').value, perDay: num($('#pe_per').value) || 0, lowDays: num($('#pe_low').value) || 2 }); savePantry(id, it); closeSheet(); render(); break; }
     case 'pDel': { const id = a.dataset.id; delete S.pantry[id]; await del('pantry/' + id); closeSheet(); render(); break; }
@@ -789,7 +818,7 @@ document.addEventListener('click', async e => {
       if (m.fatPct == null && m.fatKg != null && m.weight) m.fatPct = r1(m.fatKg / m.weight * 100);
       Object.keys(m).forEach(k => { if (m[k] == null || m[k] === '') delete m[k]; });
       if (Object.keys(m).length <= 1) { toast('ใส่อย่างน้อย 1 ค่า'); break; }
-      const f = $('#m_photo')?.files?.[0]; if (f) { try { m.photoId = await addPhoto(f, { kind: 'body', date: m.date }); } catch (err) { } }
+      if ((ui.measFiles || []).length) m.fileIds = [...ui.measFiles]; ui.measFiles = [];
       saveMeasurement(m); render(); logAct('body', `ผลวัดร่างกาย ${thShort(m.date)}${m.weight ? ` · น้ำหนัก ${m.weight} kg` : ''}${m.smm ? ` · SMM ${m.smm} kg` : ''}${m.waist ? ` · เอว ${m.waist} cm` : ''}`); toast('บันทึกผลวัดแล้ว'); break;
     }
     case 'measDel': { const dt = a.dataset.date; S.profileDoc.measurements = S.profileDoc.measurements.filter(x => x.date !== dt); saveProfile(); render(); break; }
@@ -820,6 +849,27 @@ document.addEventListener('change', async e => {
   if (el.id === 'dateInput' && el.value) { ui.date = el.value; render(); return; }
   if (el.id === 'pantry') { ui.pantry = el.value; return; }
   if (el.id === 'importFile' && el.files[0]) { importJson(el.files[0]); return; }
+  if (el.type === 'file' && el.files?.[0] && el.dataset.att) {
+    const f = el.files[0]; const [kind, k1, k2] = el.dataset.att.split('|'); el.value = '';
+    try {
+      toast('กำลังแนบไฟล์...');
+      const id = await addFile(f, { kind, date: k1 && /^\d{4}-/.test(k1) ? k1 : todayStr(), ref: el.dataset.att });
+      if (kind === 'meal') { const d = ensureDay(k1); d.photos = d.photos || {}; (d.photos[k2] = d.photos[k2] || []).push(id); saveDay(k1); render(); logAct('food', `แนบรูปมื้อ${k2} ${thShort(k1)}`); }
+      else if (kind === 'mealItem') { const d = ensureDay(k1); const x = d.meals.find(m => m.id === k2); if (x) { x.fileIds = [...(x.fileIds || []), id]; saveDay(k1); editMealSheet(k2); render(); logAct('food', `แนบหลักฐาน ${x.name} ${thShort(k1)}`); } }
+      else if (kind === 'ex') { const d = ensureDay(k1); const x = d.exercises.find(e => e.id === k2); if (x) { x.fileIds = [...(x.fileIds || []), id]; saveDay(k1); exSheet(k2); render(); logAct('ex', `แนบหลักฐานการออกกำลังกาย ${thShort(k1)}`); } }
+      else if (kind === 'exnew') { ui.exFiles = [...(ui.exFiles || []), id]; exSheet(null); }
+      else if (kind === 'water') { const d = ensureDay(k1); d.waterFiles = [...(d.waterFiles || []), id]; saveDay(k1); render(); }
+      else if (kind === 'add') { ui.addFiles = [...(ui.addFiles || []), id]; const b = $('#addFilesBox'); if (b) { b.innerHTML = thumbs(ui.addFiles); hydratePhotos(); } }
+      else if (kind === 'wo' && ui.wo) { ui.wo.photoIds = [...(ui.wo.photoIds || []), id]; woSheet(); }
+      else if (kind === 'recipe') { const r = S.recipes[k1]; if (r) { r.photoIds = [...(r.photoIds || []), id]; await put('recipes/' + k1, r); render(); logAct('recipe', `เพิ่มรูปผลงานเมนู ${r.name}`, { line: false }); } }
+      else if (kind === 'pantry') { const it = S.pantry[k1]; if (it) { it.fileIds = [...(it.fileIds || []), id]; savePantry(k1, it); render(); } }
+      else if (kind === 'pnew') { ui.pnFiles = [...(ui.pnFiles || []), id]; render(); }
+      else if (kind === 'meas') { ui.measFiles = [...(ui.measFiles || []), id]; render(); }
+      else if (kind === 'msg') { ui.msgFiles = [...(ui.msgFiles || []), id]; render(); }
+      toast('แนบไฟล์แล้ว');
+    } catch (err) { toast(err && err.code === 'too-big' ? 'ไฟล์ใหญ่เกิน 700 KB ลองแคปหน้าจอเป็นรูปแทน' : 'แนบไฟล์ไม่สำเร็จ ลองใหม่'); }
+    return;
+  }
   if (el.type === 'file' && el.files?.[0]) {
     const f = el.files[0];
     try {
@@ -852,11 +902,13 @@ async function importJson(file) {
     Object.entries(o.recipes || {}).forEach(([id, r]) => { batch.set(ref('recipes/' + id), r); n++; });
     Object.entries(o.pantry || {}).forEach(([id, r]) => { batch.set(ref('pantry/' + id), r); n++; });
     Object.entries(o.workouts || {}).forEach(([id, r]) => { batch.set(ref('workouts/' + id), r); n++; });
-    await batch.commit(); toast(`นำเข้าแล้ว ${n} รายการ`);
+    await batch.commit();
+    // ไฟล์แนบ (เขียนทีละไฟล์ เพราะรูปมีขนาดใหญ่)
+    for (const [id, f] of Object.entries(o.files || {})) { await put('photos/' + id, { ...f, at: f.at || Date.now(), byUid: S.me.uid, byName: S.me.name }); n++; } toast(`นำเข้าแล้ว ${n} รายการ`);
   } catch (e) { console.error(e); toast('นำเข้าไม่สำเร็จ: ไฟล์ไม่ถูกต้องหรือไม่มีสิทธิ์'); }
 }
 function exportJson() {
-  const o = { format: 'fit-routine-export', version: 2, exportedAt: todayStr(), profile: { ...S.profileDoc, plan: S.plan }, days: S.days, recipes: S.recipes, pantry: S.pantry, workouts: S.workouts };
+  const o = { format: 'fit-routine-export', version: 2, exportedAt: todayStr(), profile: { ...S.profileDoc, plan: S.plan }, days: S.days, recipes: S.recipes, pantry: S.pantry, workouts: S.workouts, note: 'ไฟล์แนบไม่รวมในไฟล์สำรองนี้ ยังอยู่ใน Firebase' };
   const url = URL.createObjectURL(new Blob([JSON.stringify(o, null, 1)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = `fit-routine-backup-${todayStr()}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
