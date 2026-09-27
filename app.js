@@ -57,23 +57,42 @@ function savePlan() { if (!S.plan) S.plan = defaultPlan(); later('plan', 'plan/m
 function saveDay(ds) { later('day:' + ds, 'days/' + ds, () => ({ ...emptyDay(), ...(S.days[ds] || {}), date: ds })); }
 function mut(fn, { day, prof, plan } = {}) { fn(); if (day) saveDay(day); if (prof) saveProfile(); if (plan) savePlan(); render(); }
 
-/* ============ activity + LINE ============ */
+/* ============ activity + LINE (1:1 ผ่าน LINE Login + OA) ============ */
+// ทุกคนมี "กุญแจผู้รับ": เจ้าของ = 'owner', สมาชิก = memberId
+const ALERT_TYPES = [['food', 'อาหาร'], ['train', 'การเทรน'], ['ex', 'ออกกำลังกาย'], ['body', 'ผลวัดร่างกาย'], ['msg', 'ข้อความในทีม'], ['recipe', 'เมนู/ครัว']];
+const DEFAULT_TYPES = { owner: ['train', 'msg'], trainer: ['food', 'ex', 'body', 'msg'], viewer: ['msg'] };
+const myKey = () => S.me?.role === 'owner' ? 'owner' : S.me?.memberId;
+function alertCfg() { return (S.config && S.config.alerts) || {}; }
+function recipients(type) {
+  const A = alertCfg(), me = myKey(), out = [];
+  const people = [['owner', 'owner'], ...Object.entries(S.members || {}).filter(([, m]) => m.active && m.role !== 'owner').map(([id, m]) => [id, m.role])];
+  // สมาชิกที่ไม่ใช่เจ้าของไม่เห็นรายชื่อสมาชิก ใช้รายการที่เจ้าของบันทึกไว้ใน config แทน
+  const keys = new Set([...people.map(p => p[0]), ...Object.keys(A)]);
+  keys.forEach(k => { if (k === me) return; const a = A[k]; if (!a || !a.on) return; if ((a.types || []).includes(type)) out.push(k); });
+  return out;
+}
 const lineQ = [];
-function queueLine(text) {
-  const c = S.config || {};
-  if (!c.lineOn || !c.lineUrl || !c.lineSecret) return;
-  lineQ.push(text); clearTimeout(queueLine._t);
+function lineReady() { const c = S.config || {}; return !!(c.lineOn && c.lineUrl && c.lineSecret); }
+function queueLine(type, text) {
+  if (!lineReady()) return;
+  const to = recipients(type); if (!to.length) return;
+  lineQ.push({ type, text, to }); clearTimeout(queueLine._t);
   queueLine._t = setTimeout(flushLine, 45000);
+}
+function relayPost(payload, beacon) {
+  const c = S.config || {}; const body = JSON.stringify({ secret: c.lineSecret, ...payload });
+  try {
+    if (beacon && navigator.sendBeacon) return navigator.sendBeacon(c.lineUrl, new Blob([body], { type: 'text/plain' }));
+    return fetch(c.lineUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body }).then(r => r.json()).catch(() => fetch(c.lineUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body }).then(() => ({ ok: true, unknown: true })));
+  } catch (e) { return Promise.resolve({ ok: false }); }
 }
 function flushLine(beacon) {
   if (!lineQ.length) return;
-  const c = S.config || {};
-  const text = `Fit Routine · อัปเดต\n` + lineQ.splice(0).join('\n') + `\n${location.origin}${location.pathname}`;
-  const body = JSON.stringify({ secret: c.lineSecret, text });
-  try {
-    if (beacon && navigator.sendBeacon) navigator.sendBeacon(c.lineUrl, new Blob([body], { type: 'text/plain' }));
-    else fetch(c.lineUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body });
-  } catch (e) { }
+  const items = lineQ.splice(0), by = {};
+  items.forEach(it => it.to.forEach(k => { (by[k] = by[k] || []).push(it.text); }));
+  const link = `${location.origin}${location.pathname}`;
+  const messages = Object.entries(by).map(([to, lines]) => ({ to, text: `Fit Routine · อัปเดตจาก ${S.me.name}\n` + lines.join('\n') + `\n${link}` }));
+  if (messages.length) relayPost({ messages }, beacon);
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { clearTimeout(queueLine._t); flushLine(true); } });
 async function logAct(type, text, { line = true, fileIds } = {}) {
@@ -81,15 +100,42 @@ async function logAct(type, text, { line = true, fileIds } = {}) {
   const id = 'a-' + Date.now().toString(36) + newId();
   const icon = { food: '🍽', train: '🏋️', body: '📏', msg: '💬', water: '💧', ex: '🏊', recipe: '📖', pantry: '🧺' }[type] || '•';
   try { await fb.setDoc(ref('activity/' + id), { at: Date.now(), type, text, byName: S.me.name, byRole: S.me.role, byUid: S.me.uid, ...(fileIds && fileIds.length ? { fileIds } : {}) }); } catch (e) { console.warn(e); }
-  if (line) queueLine(`${icon} ${S.me.name}: ${text}${fileIds && fileIds.length ? ' 📎' : ''}`);
+  if (line) queueLine(type, `${icon} ${text}${fileIds && fileIds.length ? ' 📎' : ''}`);
 }
-function sendLineNow(text) {
+async function sendLineNow(text, to) {
   const c = S.config || {};
   if (!c.lineUrl || !c.lineSecret) { toast('ยังไม่ได้ตั้งค่า LINE ในหน้าตั้งค่า'); return false; }
-  fetch(c.lineUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ secret: c.lineSecret, text }) }).catch(() => { });
+  const keys = to || recipients('food').concat(recipients('msg')).filter((k, i, a) => a.indexOf(k) === i);
+  if (!keys.length) { toast('ยังไม่มีผู้รับที่เชื่อม LINE และเปิดรับแจ้งเตือน'); return false; }
+  const r = await relayPost({ messages: keys.map(k => ({ to: k, text })) });
+  if (r && r.ok === false) { toast('ส่งไม่สำเร็จ: ' + (r.error || 'ตรวจการตั้งค่า LINE')); return false; }
   return true;
 }
-
+async function lineInfo(force) {
+  const c = S.config || {}; if (!c.lineUrl || !c.lineSecret) return null;
+  if (ui.lineInfo && !force) return ui.lineInfo;
+  try { const r = await fetch(`${c.lineUrl}?action=info&secret=${encodeURIComponent(c.lineSecret)}`); ui.lineInfo = await r.json(); }
+  catch (e) { ui.lineInfo = { ok: false, error: 'เชื่อมต่อ Apps Script ไม่ได้' }; }
+  render(); return ui.lineInfo;
+}
+async function linkLine() {
+  const info = await lineInfo(true);
+  if (!info || !info.ok) { toast(info?.error || 'ยังไม่ได้ตั้งค่า LINE'); return; }
+  if (!info.loginChannelId) { toast('ยังไม่ได้ใส่ LOGIN_CHANNEL_ID ใน Apps Script'); return; }
+  const st = btoa(unescape(encodeURIComponent(JSON.stringify({ k: myKey(), n: S.me.name, r: location.origin + location.pathname + '#settings', t: Date.now() })))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const u = new URL('https://access.line.me/oauth2/v2.1/authorize');
+  u.search = new URLSearchParams({ response_type: 'code', client_id: info.loginChannelId, redirect_uri: info.callback, state: st, scope: 'profile openid', bot_prompt: 'aggressive' }).toString();
+  location.href = u.toString();
+}
+function lineLinkCard() {
+  const info = ui.lineInfo, k = myKey(), L = info?.links?.[k], a = alertCfg()[k];
+  if (!(S.config || {}).lineUrl) return `<section class="card"><h2>LINE ของฉัน</h2><p class="small muted">เจ้าของยังไม่ได้ตั้งค่าการแจ้งเตือน LINE</p></section>`;
+  return `<section class="card"><div class="card-h"><h2>LINE ของฉัน</h2>${L ? `<span class="pill good">เชื่อมแล้ว · ${esc(L.name || '')}</span>` : '<span class="pill plain">ยังไม่เชื่อม</span>'}</div>
+   <p class="small muted">เชื่อม LINE ครั้งเดียว ระบบจะชวนเพิ่มเพื่อน Fit Routine แล้วส่งแจ้งเตือนเป็นแชต 1:1 ถึงคุณ</p>
+   ${L && L.friend === false ? '<p class="small" style="color:var(--warn)">ยังไม่ได้เพิ่มเพื่อน Fit Routine ใน LINE ต้องเพิ่มเพื่อนก่อนถึงจะได้รับข้อความ</p>' : ''}
+   <p class="small">${a && a.on ? `รับแจ้งเตือน: ${(a.types || []).map(t => (ALERT_TYPES.find(x => x[0] === t) || ['', t])[1]).join(' · ') || '-'}` : 'เจ้าของยังไม่ได้เปิดรับแจ้งเตือนให้คุณ'}</p>
+   <div class="row"><button class="btn pri" data-act="lineLink">${L ? 'เชื่อมใหม่' : 'เชื่อม LINE'}</button>${L ? '<button class="btn" data-act="lineSelfTest">ส่งข้อความทดสอบถึงฉัน</button>' : ''}<button class="btn link" data-act="lineRefresh">ตรวจสถานะ</button></div></section>`;
+}
 /* ============ photos ============ */
 function loadImage(file) { return new Promise((res, rej) => { const url = URL.createObjectURL(file); const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; }); }
 async function compress(file) {
@@ -318,7 +364,7 @@ function renderToday() {
     ${feedCard()}
     <section class="card">
      <div class="card-h"><h3>ส่งสรุป</h3></div>
-     <div class="row"><button class="btn" data-act="copyDay">คัดลอกสรุปวันนี้</button><button class="btn" data-act="copyWeek">คัดลอกสรุป 7 วัน</button>${own ? '<button class="btn pri" data-act="lineDay">ส่งสรุปวันนี้เข้ากลุ่ม LINE</button>' : ''}</div>
+     <div class="row"><button class="btn" data-act="copyDay">คัดลอกสรุปวันนี้</button><button class="btn" data-act="copyWeek">คัดลอกสรุป 7 วัน</button>${own && lineReady() ? '<button class="btn pri" data-act="lineDay">ส่งสรุปวันนี้ทาง LINE</button>' : ''}</div>
      <textarea id="shareOut" rows="8" readonly hidden></textarea>
     </section>
    </div>
@@ -349,7 +395,7 @@ function proteinCard(ds, A) {
 }
 function feedCard() {
   const list = S.activity.slice(0, 12);
-  return `<section class="card"><div class="card-h"><h3>ความเคลื่อนไหวในทีม</h3>${S.config.lineOn ? '<span class="pill plain">แจ้ง LINE อยู่</span>' : ''}</div>
+  return `<section class="card"><div class="card-h"><h3>ความเคลื่อนไหวในทีม</h3>${lineReady() ? '<span class="pill plain">แจ้ง LINE อยู่</span>' : ''}</div>
   <div class="row" style="flex-wrap:nowrap"><input id="msgText" placeholder="ส่งข้อความถึงทีม เช่น วันนี้ปวดเข่า ขอเบาขา">${attachBtn('msg', '')}<button class="btn pri" data-act="sendMsg">ส่ง</button></div>${(ui.msgFiles || []).length ? `<p class="small muted">${CLIP} แนบแล้ว ${ui.msgFiles.length} ไฟล์ จะส่งไปกับข้อความ</p>` : ''}
   ${list.length ? `<ul class="feed">${list.map(a => `<li><span class="who">${esc(a.byName || '')}<span class="muted"> · ${ROLE_TH[a.byRole] || ''}</span></span><span class="txt">${esc(a.text)}${thumbs(a.fileIds)}</span><span class="when">${timeAgo(a.at)}</span></li>`).join('')}</ul>` : '<p class="empty">ยังไม่มีความเคลื่อนไหว</p>'}</section>`;
 }
@@ -622,14 +668,26 @@ function setMembers() {
    <div class="row"><button class="btn pri" data-act="memAdd">เพิ่มสมาชิก</button></div></section>`;
 }
 function setLine() {
-  const c = S.config || {};
-  return `<section class="card"><h2>แจ้งเตือนกลุ่ม LINE</h2>
-   <p class="small muted">ใส่ URL ของ Apps Script (ขั้นตอนที่ 4 ในคู่มือ) และรหัสลับที่ตั้งไว้ในสคริปต์ ทุกคนในทีมจะส่งแจ้งเตือนเข้ากลุ่มได้ การอัปเดตในช่วง 45 วินาทีจะรวมเป็นข้อความเดียว</p>
+  const c = S.config || {}, info = ui.lineInfo, A = alertCfg();
+  const people = [['owner', 'Beer (เจ้าของ)', 'owner'], ...Object.entries(S.members || {}).filter(([, m]) => m.role !== 'owner').map(([id, m]) => [id, `${m.name} (${ROLE_TH[m.role]})`, m.role])];
+  if (c.lineUrl && !info) lineInfo();
+  return `<section class="card"><h2>แจ้งเตือน LINE (แชต 1:1)</h2>
+   <p class="small muted">แต่ละคนกด "เชื่อม LINE" เองครั้งเดียว แล้วเจ้าของเลือกว่าใครจะได้รับแจ้งเตือนเรื่องอะไร คนที่อัปเดตจะไม่ได้รับเรื่องของตัวเอง การอัปเดตภายใน 45 วินาทีจะรวมเป็นข้อความเดียว</p>
    <label class="f"><span>Apps Script Web App URL</span><input id="ln_url" value="${esc(c.lineUrl || '')}" placeholder="https://script.google.com/macros/s/…/exec"></label>
    <label class="f"><span>รหัสลับ (APP_SECRET)</span><input id="ln_secret" value="${esc(c.lineSecret || '')}"></label>
-   <label class="row small"><input type="checkbox" id="ln_on" ${c.lineOn ? 'checked' : ''}> เปิดแจ้งเตือน</label>
-   <div class="row"><button class="btn pri" data-act="lineSave">บันทึก</button><button class="btn" data-act="lineTest">ส่งข้อความทดสอบ</button></div>
-   <p class="small muted">แผนฟรีของ LINE OA ส่งได้ราว 300 ข้อความ/เดือน และข้อความเข้ากลุ่มนับตามจำนวนคนในกลุ่ม</p></section>`;
+   <label class="row small"><input type="checkbox" id="ln_on" ${c.lineOn ? 'checked' : ''}> เปิดระบบแจ้งเตือน</label>
+   <div class="row"><button class="btn pri" data-act="lineSave">บันทึก</button><button class="btn" data-act="lineRefresh">ตรวจการเชื่อมต่อ</button></div>
+   ${info ? (info.ok ? `<p class="small ev-ok">เชื่อม Apps Script ได้ · Messaging API ${info.hasToken ? '✓' : '✗ ยังไม่ใส่ LINE_TOKEN'} · LINE Login ${info.loginChannelId ? '✓' : '✗ ยังไม่ใส่ LOGIN_CHANNEL_ID'}</p>` : `<p class="small" style="color:var(--bad)">${esc(info.error || 'เชื่อมต่อไม่ได้')}</p>`) : ''}
+  </section>
+  <section class="card"><h2>ใครได้รับอะไร</h2>
+   ${people.map(([k, label, role]) => { const a = A[k] || { on: false, types: DEFAULT_TYPES[role] || [] }; const L = info?.links?.[k]; return `<div class="choice" style="flex-direction:column;align-items:stretch">
+    <div class="row between"><div><b>${esc(label)}</b> ${L ? `<span class="pill good">LINE: ${esc(L.name || '')}</span>${L.friend === false ? ' <span class="pill ok">ยังไม่เพิ่มเพื่อน OA</span>' : ''}` : '<span class="pill plain">ยังไม่เชื่อม LINE</span>'}</div>
+     <label class="row small"><input type="checkbox" data-alert-on="${esc(k)}" ${a.on ? 'checked' : ''}> อนุญาต/รับแจ้งเตือน</label></div>
+    <div class="seg">${ALERT_TYPES.map(([t, l]) => `<button aria-pressed="${(a.types || []).includes(t)}" data-act="alertType" data-k="${esc(k)}" data-t="${t}">${l}</button>`).join('')}</div>
+    ${L ? `<div class="row"><button class="btn sm" data-act="lineTestTo" data-k="${esc(k)}">ส่งทดสอบ</button><button class="btn sm link danger" data-act="lineUnlink" data-k="${esc(k)}">ยกเลิกการเชื่อม</button></div>` : ''}
+   </div>`; }).join('')}
+   <p class="small muted">เทรนเนอร์เปิดแอป → ตั้งค่า → บัญชี → เชื่อม LINE · ของคุณเองก็กดที่เดียวกัน</p>
+  </section>${lineLinkCard()}`;
 }
 function setData() {
   return `<section class="card"><h2>นำเข้า / สำรองข้อมูล</h2>
@@ -638,7 +696,8 @@ function setData() {
   <section class="card"><h2>วางจากอินัง</h2><p class="small muted">ข้อความที่ขึ้นต้นด้วย FIT1 จากแชตกับอินัง กดปุ่ม "วางจากอินัง" ในหน้าวันนี้ได้เลย</p><button class="btn pri" data-act="pasteOpen">เปิดช่องวาง</button></section>`;
 }
 function setAccount() {
-  return `<section class="card"><h2>บัญชี</h2><p>${esc(S.me.name)} · ${ROLE_TH[S.me.role]}${S.me.email ? ` · ${esc(S.me.email)}` : ''}</p><button class="btn danger" data-act="signOut">ออกจากระบบ</button></section>`;
+  if ((S.config || {}).lineUrl && !ui.lineInfo) lineInfo();
+  return `${lineLinkCard()}<section class="card"><h2>บัญชี</h2><p>${esc(S.me.name)} · ${ROLE_TH[S.me.role]}${S.me.email ? ` · ${esc(S.me.email)}` : ''}</p><button class="btn danger" data-act="signOut">ออกจากระบบ</button></section>`;
 }
 
 /* ============ sheets ============ */
@@ -777,7 +836,7 @@ document.addEventListener('click', async e => {
     case 'sendMsg': { const t = $('#msgText').value.trim(); const files = [...(ui.msgFiles || [])]; if (!t && !files.length) break; $('#msgText').value = ''; ui.msgFiles = []; await logAct('msg', (t || 'ส่งไฟล์แนบ') + (files.length ? ` (แนบ ${files.length} ไฟล์)` : ''), { fileIds: files }); toast('ส่งแล้ว'); render(); break; }
     case 'copyDay': copyText(trainerDayText(ui.date)); break;
     case 'copyWeek': copyText(trainerWeekText()); break;
-    case 'lineDay': if (sendLineNow(trainerDayText(ui.date))) toast('ส่งสรุปเข้ากลุ่ม LINE แล้ว'); break;
+    case 'lineDay': if (await sendLineNow(trainerDayText(ui.date), recipients('food'))) toast('ส่งสรุปทาง LINE แล้ว'); break;
     case 'pasteOpen': ui.pasted = null; ui.addFiles = []; pasteSheet(); break;
     case 'pastePreview': try { ui.pasted = parsePaste($('#pasteText').value); $('#pasteOut').innerHTML = pastePreviewHtml(ui.pasted); document.querySelector('[data-act="pasteApply"]').disabled = false; } catch (err) { $('#pasteOut').innerHTML = `<p class="small" style="color:var(--bad)">${esc(err.message)} · ก๊อปข้อความจากอินังให้ครบทั้งก้อน</p>`; } break;
     case 'pasteApply': if (ui.pasted) { await applyPaste(ui.pasted); ui.pasted = null; closeSheet(); toast('นำเข้าแล้ว'); } break;
@@ -841,13 +900,19 @@ document.addEventListener('click', async e => {
     case 'memToggle': { const id = a.dataset.id, m = S.members[id]; m.active = !m.active; await put('members/' + id, m); render(); break; }
     case 'memNewCode': { const id = a.dataset.id, m = S.members[id]; m.inviteCode = newId() + newId(); await put('members/' + id, m); render(); toast('ลิงก์เดิมใช้ไม่ได้แล้ว ส่งลิงก์ใหม่แทน'); break; }
     case 'memKick': { const id = a.dataset.id; const ds = Object.entries(S.devices).filter(([, d]) => d.memberId === id); for (const [uid] of ds) await del('memberDevices/' + uid); toast(`ออกจากระบบ ${ds.length} อุปกรณ์แล้ว`); break; }
-    case 'lineSave': { const c = { ...S.config, lineUrl: $('#ln_url').value.trim(), lineSecret: $('#ln_secret').value.trim(), lineOn: $('#ln_on').checked }; await put('config/app', c); S.config = c; toast('บันทึกแล้ว'); break; }
-    case 'lineTest': { S.config = { ...S.config, lineUrl: $('#ln_url').value.trim(), lineSecret: $('#ln_secret').value.trim() }; if (sendLineNow(`Fit Routine: ทดสอบการแจ้งเตือนจาก ${S.me.name} ✅`)) toast('ส่งแล้ว ดูในกลุ่ม LINE'); break; }
+    case 'lineSave': { const c = { ...S.config, lineUrl: $('#ln_url').value.trim(), lineSecret: $('#ln_secret').value.trim(), lineOn: $('#ln_on').checked }; if (!c.alerts) c.alerts = { owner: { on: true, types: DEFAULT_TYPES.owner } }; await put('config/app', c); S.config = c; ui.lineInfo = null; toast('บันทึกแล้ว'); lineInfo(true); break; }
+    case 'lineRefresh': lineInfo(true); break;
+    case 'lineLink': linkLine(); break;
+    case 'lineSelfTest': if (await sendLineNow(`Fit Routine: ทดสอบการแจ้งเตือนถึง ${S.me.name} ✅`, [myKey()])) toast('ส่งแล้ว ดูใน LINE'); break;
+    case 'lineTestTo': if (await sendLineNow(`Fit Routine: ทดสอบการแจ้งเตือนจาก ${S.me.name} ✅`, [a.dataset.k])) toast('ส่งแล้ว'); break;
+    case 'lineUnlink': { if (a.dataset.confirm !== '1') { a.dataset.confirm = '1'; a.textContent = 'กดอีกครั้งเพื่อยืนยัน'; break; } const r = await relayPost({ action: 'unlink', k: a.dataset.k }); toast(r && r.ok !== false ? 'ยกเลิกการเชื่อมแล้ว' : 'ยกเลิกไม่สำเร็จ'); lineInfo(true); break; }
+    case 'alertType': { const k = a.dataset.k, t = a.dataset.t; const c = { ...S.config }; c.alerts = { ...(c.alerts || {}) }; const role = k === 'owner' ? 'owner' : (S.members[k]?.role || 'viewer'); const cur = c.alerts[k] || { on: false, types: [...(DEFAULT_TYPES[role] || [])] }; const types = new Set(cur.types || []); types.has(t) ? types.delete(t) : types.add(t); c.alerts[k] = { ...cur, types: [...types] }; await put('config/app', c); S.config = c; render(); break; }
     case 'exportJson': exportJson(); break;
   }
 });
 document.addEventListener('change', async e => {
   const el = e.target;
+  if (el.dataset.alertOn) { const k = el.dataset.alertOn; const c = { ...S.config }; c.alerts = { ...(c.alerts || {}) }; const role = k === 'owner' ? 'owner' : (S.members[k]?.role || 'viewer'); c.alerts[k] = { types: [...(DEFAULT_TYPES[role] || [])], ...(c.alerts[k] || {}), on: el.checked }; await put('config/app', c); S.config = c; render(); return; }
   if (el.dataset.bind) { if (!isOwner()) return; const v = el.dataset.type === 'num' ? num(el.value) : el.value; if (el.dataset.type === 'num' && v == null) return; mut(() => setPath(S.profileDoc, el.dataset.bind, v), { prof: true }); return; }
   if (el.dataset.pd) { const [dw, f] = el.dataset.pd.split('|'); mut(() => { const p = S.plan.days[dw] = S.plan.days[dw] || { title: '', rest: false, cardio: { type: 'swim_easy', min: 0 }, wMin: 0, weights: [] }; p.cardio = p.cardio || { type: 'swim_easy', min: 0 }; if (f === 'title') p.title = el.value; else if (f === 'rest') p.rest = el.checked; else if (f === 'type') p.type = el.value; else if (f === 'cardioType') p.cardio.type = el.value; else if (f === 'cardioMin') p.cardio.min = num(el.value) || 0; else if (f === 'wMin') p.wMin = num(el.value) || 0; }, { plan: true }); return; }
   if (el.dataset.pw) { const [dw, i, f] = el.dataset.pw.split('|'); mut(() => { const w = S.plan.days[dw].weights[+i]; if (w) w[f] = (f === 's' || f === 'kg') ? (num(el.value) || 0) : el.value; }, { plan: true }); return; }
@@ -967,6 +1032,7 @@ async function handleUser(user) {
   return join ? renderJoin() : renderLogin('อุปกรณ์นี้ยังไม่ได้รับสิทธิ์ เปิดจากลิงก์เชิญที่เจ้าของส่งให้');
 }
 function startApp() {
+  if (/line=linked/.test(location.search)) { ui.tab = 'settings'; ui.setTab = 'account'; toast('เชื่อม LINE สำเร็จ'); history.replaceState(null, '', location.pathname); }
   document.body.classList.remove('gated'); $('#tabs').hidden = false;
   document.querySelectorAll('[data-owner-only]').forEach(el => el.hidden = !isOwner());
   if (!isOwner() && ui.tab === 'today' && S.me.role === 'trainer') ui.tab = 'train';
@@ -983,5 +1049,5 @@ async function boot() {
     fb.onAuthStateChanged(auth, u => handleUser(u));
   } catch (e) { console.error(e); gate('<h2>โหลดไม่สำเร็จ</h2><p class="small">ตรวจสอบอินเทอร์เน็ตแล้วรีเฟรชหน้านี้</p>'); }
 }
-export const __test = { S, ui, analyze, proteinPlans, exHistory, woSummary, parsePaste, trainerDayText, renderToday, renderTrain, renderKitchen, renderBody, renderOverview, renderSettings, genMenu, macros, kcalTarget, weightSessions, setPath };
+export const __test = { recipients, S, ui, analyze, proteinPlans, exHistory, woSummary, parsePaste, trainerDayText, renderToday, renderTrain, renderKitchen, renderBody, renderOverview, renderSettings, genMenu, macros, kcalTarget, weightSessions, setPath };
 if (typeof window !== 'undefined' && !window.__NO_BOOT__) boot();

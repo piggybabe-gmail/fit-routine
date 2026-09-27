@@ -41,25 +41,29 @@
 3. เพิ่มลงหน้าจอโฮม: ปุ่มแชร์ของ Safari → **เพิ่มไปยังหน้าจอโฮม**
    - แอปบนหน้าจอโฮมแยกการล็อกอินจาก Safari ให้ไปที่ **ตั้งค่า → สมาชิก** เพิ่มสิทธิ์ **อุปกรณ์อื่นของฉัน** → คัดลอกลิงก์ → เปิดแอปบนหน้าจอโฮม → วางลิงก์ในช่อง **มีลิงก์เชิญ?** → พิมพ์ชื่อ
 
-### 4. แจ้งเตือนเข้ากลุ่ม LINE
-1. **สร้าง LINE OA:** https://manager.line.biz → สร้างบัญชี `Fit Routine`
-   - **ตั้งค่า → บัญชี → อนุญาตให้บัญชีเข้าร่วมกลุ่มแชท** = เปิด
-   - **ตั้งค่า → Messaging API → เปิดใช้งาน** (สร้าง Provider ใหม่ได้)
-   - **ตั้งค่าการตอบกลับ:** ปิดข้อความตอบกลับอัตโนมัติ · เปิด Webhook
-2. **เอา Token:** https://developers.line.biz → เลือก Channel → แท็บ **Messaging API** → **Channel access token (long-lived) → Issue** → คัดลอก
-3. **สร้าง Apps Script:** https://script.new → ลบโค้ดเดิม วางไฟล์ `line-relay/Code.gs`
-   - เฟือง **Project Settings → Script properties** → เพิ่ม `LINE_TOKEN` = token จากข้อ 2 และ `APP_SECRET` = คำลับที่ตั้งเอง (เช่น `beer-fit-2026-xyz`)
-   - **Deploy → New deployment → Web app** · Execute as: **Me** · Who has access: **Anyone** → Deploy → อนุญาตสิทธิ์ → คัดลอก **Web app URL**
-4. กลับไป LINE Developers → **Webhook URL** = URL จากข้อ 3 → เปิด **Use webhook** (ปุ่ม Verify อาจขึ้น error เพราะ Apps Script ตอบกลับแบบ redirect ไม่เป็นไร ใช้งานได้ปกติ)
-5. สร้างกลุ่ม LINE กับเทรนเนอร์ → เชิญบัญชี `Fit Routine` เข้ากลุ่ม → บอทจะตอบ "เชื่อมกลุ่มนี้กับ Fit Routine แล้ว" (ถ้าไม่ตอบ พิมพ์ `ผูกกลุ่ม` ในกลุ่ม)
-6. ในแอป: **ตั้งค่า → LINE** → วาง Web app URL + APP_SECRET → ติ๊ก **เปิดแจ้งเตือน** → **บันทึก** → **ส่งข้อความทดสอบ**
+### 4. แจ้งเตือน LINE (แชต 1:1 ไม่ต้องมีกลุ่ม)
+แต่ละคนเชื่อม LINE ของตัวเองด้วย LINE Login แล้วเจ้าของเลือกว่าใครได้รับแจ้งเตือนเรื่องอะไร
+ข้อความส่งผ่าน LINE OA "Fit Routine" เป็นแชต 1:1 (LINE ปิด LINE Notify แล้ว จึงต้องมี OA เป็นผู้ส่ง)
 
-> แผนฟรีของ LINE OA ส่งได้ราว 300 ข้อความ/เดือน และข้อความเข้ากลุ่มนับตามจำนวนสมาชิก แอปจึงรวมการอัปเดตในช่วง 45 วินาทีเป็นข้อความเดียว
+1. **LINE OA + Messaging API:** https://manager.line.biz → สร้างบัญชี `Fit Routine` → ตั้งค่า → Messaging API → เปิดใช้งาน (สร้าง Provider ชื่อ `Fit Routine`)
+   - ตั้งค่าการตอบกลับ: ปิดข้อความตอบกลับอัตโนมัติ · เปิด Webhook
+2. **Channel access token:** https://developers.line.biz/console → Provider `Fit Routine` → channel ของ OA → แท็บ Messaging API → Channel access token (long-lived) → Issue
+3. **Apps Script:** https://script.new → วางไฟล์ `line-relay/Code.gs` → Deploy → New deployment → Web app · Execute as **Me** · Who has access **Anyone** → คัดลอก Web app URL
+4. **LINE Login channel:** ใน Provider เดียวกัน → Create a new channel → **LINE Login** → App types: **Web app**
+   - แท็บ LINE Login → Callback URL = Web app URL จากข้อ 3
+   - แท็บ Basic settings → Linked LINE Official Account = Fit Routine
+   - เปลี่ยนสถานะจาก Developing เป็น **Published**
+5. **Script properties** (Apps Script → รูปเฟือง): `LINE_TOKEN`, `APP_SECRET`, `LOGIN_CHANNEL_ID`, `LOGIN_CHANNEL_SECRET`
+6. Messaging API → Webhook URL = Web app URL → เปิด Use webhook
+7. แอป: ตั้งค่า → LINE → วาง URL + APP_SECRET → เปิดระบบแจ้งเตือน → บันทึก → ตั้งค่า → บัญชี → เชื่อม LINE
+8. ตั้งค่า → LINE → เลือกว่าใครรับเรื่องอะไร (ค่าเริ่มต้น: เจ้าของรับเรื่องการเทรน/ข้อความ · เทรนเนอร์รับอาหาร/ออกกำลังกาย/ผลวัด/ข้อความ)
+
+> แผนฟรีของ LINE OA ส่งได้ราว 300 ข้อความ/เดือน แอปรวมการอัปเดตภายใน 45 วินาทีเป็นข้อความเดียวต่อผู้รับ
 
 ### 5. เชิญเทรนเนอร์
 1. **ตั้งค่า → สมาชิก** → พิมพ์ชื่อเทรนเนอร์ → สิทธิ์ **เทรนเนอร์** → **เพิ่มสมาชิก**
 2. **คัดลอกลิงก์** → ส่งให้เทรนเนอร์ใน LINE
-3. เทรนเนอร์เปิดลิงก์ (แนะนำเปิดใน Safari/Chrome ไม่ใช่เบราว์เซอร์ใน LINE) → พิมพ์ชื่อให้ตรงกับที่ตั้ง → เข้าใช้ได้ทันที
+3. เทรนเนอร์เปิดลิงก์ (แนะนำเปิดใน Safari/Chrome ไม่ใช่เบราว์เซอร์ใน LINE) → พิมพ์ชื่อให้ตรงกับที่ตั้ง → เข้าใช้ได้ทันที → ตั้งค่า → บัญชี → เชื่อม LINE
 4. ถ้าลิงก์หลุดไปถึงคนอื่น กด **สร้างลิงก์ใหม่** ลิงก์เดิมจะใช้ไม่ได้ · กด **ปิดสิทธิ์** เพื่อหยุดการเข้าถึงทั้งหมด
 
 ---
