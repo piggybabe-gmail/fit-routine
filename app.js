@@ -1,6 +1,6 @@
 // Fit Routine by Beer — v2 (GitHub Pages + Firebase)
 import { firebaseConfig } from './firebase-config.js';
-import { MEALS, TH_DOW, TH_M, FOODS, FOOD, EX, GOALS, PRESETS, LIB_RECIPES, SYN, PROTEINS, BUFFETS, CIRC, WORKOUT_TYPES, defaultProfileDoc, defaultPlan } from './data.js?v=20260927e';
+import { MEALS, TH_DOW, TH_M, FOODS, FOOD, EX, GOALS, PRESETS, LIB_RECIPES, SYN, PROTEINS, BUFFETS, DRESSINGS, CIRC, WORKOUT_TYPES, defaultProfileDoc, defaultPlan } from './data.js?v=20260927f';
 
 const FBV = 'https://www.gstatic.com/firebasejs/10.12.2/';
 let fb = null, db = null, auth = null;
@@ -832,6 +832,10 @@ function foodSheet() {
    <p class="small muted"><b>บุฟเฟ่ต์:</b> เลือกแบบร้าน แล้วแก้จำนวนจาน/ชิ้นในส่วน "ประกอบจานเอง" ด้านล่างให้ตรงที่กินจริง</p>
    <div class="seg">${BUFFETS.map(b => `<button data-act="buffet" data-v="${b.k}">${esc(b.n)}</button>`).join('')}</div>
   </details>
+  <details class="dish"><summary>ชุดน้ำสลัดกรีกโยเกิร์ต · เลือกสูตร คำนวณ kcal ให้</summary>
+   <p class="small muted">กดสูตรแล้ววัตถุดิบจะไปต่อท้ายใน "ประกอบจานเอง" ด้านล่าง (ใส่ผักสลัด/โปรตีนเพิ่มในจานเดียวกันได้) · ปรับกรัมโยเกิร์ตหรือจำนวนช้อนตามที่ใช้จริง</p>
+   <div class="flist">${DRESSINGS.map(d => { const t = partsTotal(d.parts); return `<div class="food-row"><div><div class="nm">${esc(d.n)}</div><div class="meta">${esc(d.d)}<br><span class="num">${fmt(t.kcal)} kcal · P ${r1(t.p)} · C ${r1(t.c)} · F ${r1(t.f)}</span></div></div><button class="btn sm" data-act="dressing" data-v="${d.k}">ใส่ในจาน</button></div>`; }).join('')}</div>
+  </details>
   <details open class="dish" id="dishBox"><summary>ประกอบจานเอง · ใส่น้ำหนักวัตถุดิบเป็นกรัม</summary>
    <p class="small muted">เลือกวัตถุดิบแล้วใส่น้ำหนักที่ชั่งได้ (เช่น แซลมอน 200 กรัม) แอปแปลงเป็นแคลอรี่และโปรตีนให้เอง · ชั่งตอนดิบให้เลือกแบบ <b>(ดิบ)</b> ชั่งหลังทำสุกให้เลือกแบบ <b>(สุก)</b></p>
    <div id="dishRows">${partsRows(ui.dish, 'dish')}</div>
@@ -1008,6 +1012,7 @@ document.addEventListener('click', async e => {
     case 'addFoodLib': { const f = FOOD[a.dataset.id]; const q = num(document.querySelector(`.fq[data-id="${f.id}"]`).value) || f.d; const v = foodVal(f, q); addMealItems(ui.date, [{ name: f.n, qty: qtyText(f, q), g: f.u === 'g' ? r0(q) : null, kcal: r0(v.kcal), p: r1(v.p), c: r1(v.c), f: r1(v.f), fileIds: [...(ui.addFiles || [])] }], ui.fsMeal); toast(`เพิ่ม ${f.n} แล้ว`); break; }
     case 'partAdd': { const k = a.dataset.key, L = partsList(k) || []; L.push({ id: 'shrimp', q: 100 }); if (k === 'edit') ui.editParts = L; else if (k === 'rec') ui.rec.parts = L; else ui.dish = L; refreshParts(k); break; }
     case 'partDel': { const k = a.dataset.key, L = partsList(k) || []; L.splice(+a.dataset.i, 1); refreshParts(k); break; }
+    case 'dressing': { const d = DRESSINGS.find(x => x.k === a.dataset.v); if (!d) break; const isDefault = JSON.stringify(ui.dish) === JSON.stringify([{ id: 'salmonck', q: 150 }, { id: 'rice', q: 150 }]); ui.dish = [...(isDefault ? [{ id: 'salad', q: 100 }] : (ui.dish || [])), ...clone(d.parts)]; refreshParts('dish'); const nm = $('#dishName'); if (nm && !nm.value) nm.value = 'สลัด + น้ำสลัดกรีกโยเกิร์ต' + d.n; const box = $('#dishBox'); if (box) { box.open = true; box.scrollIntoView({ behavior: 'smooth', block: 'start' }); } toast(`ใส่น้ำสลัด${d.n}แล้ว ปรับปริมาณตามที่ใช้จริง`); break; }
     case 'buffet': { const b = BUFFETS.find(x => x.k === a.dataset.v); if (!b) break; ui.dish = clone(b.parts); refreshParts('dish'); const nm = $('#dishName'); if (nm) nm.value = 'บุฟเฟ่ต์' + b.n; const box = $('#dishBox'); if (box) { box.open = true; box.scrollIntoView({ behavior: 'smooth', block: 'start' }); } toast(`ใส่แม่แบบ ${b.n} แล้ว ปรับจำนวนจานตามที่กินจริง`); break; }
     case 'dishSave': { const parts = (ui.dish || []).filter(x => FOOD[x.id] && +x.q > 0); if (!parts.length) { toast('ใส่น้ำหนักวัตถุดิบอย่างน้อย 1 อย่าง'); break; } const t = partsTotal(parts); const name = $('#dishName').value.trim() || parts.map(x => FOOD[x.id].n.replace(/\s*\(.*\)$/, '')).join(' + '); addMealItems(ui.date, [{ name, qty: partsQty(parts), parts: clone(parts), kcal: r0(t.kcal), p: r1(t.p), c: r1(t.c), f: r1(t.f), fileIds: [...(ui.addFiles || [])] }], ui.fsMeal); ui.dish = null; toast(`เพิ่ม ${name} · ${fmt(t.kcal)} kcal · P ${r0(t.p)} g`); closeSheet(); break; }
     case 'mfCalc': $('#mf_kcal').value = r0((readNum('#mf_p') || 0) * 4 + (readNum('#mf_c') || 0) * 4 + (readNum('#mf_f') || 0) * 9); break;
