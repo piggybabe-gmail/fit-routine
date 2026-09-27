@@ -121,16 +121,23 @@ const CLIP = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke
 const ev = (n, soft) => n > 0 ? `<span class="ev on">${CLIP}${n > 1 ? ' ' + n : ''} มีหลักฐาน</span>` : (soft ? '' : '<span class="ev off">ไม่มีหลักฐาน</span>');
 const thumb = (id, big) => `<button class="thumb${big ? ' big' : ''}" data-act="photoView" data-id="${id}" aria-label="ดูไฟล์แนบ"><img data-pid="${id}" alt=""></button>`;
 const thumbs = ids => (ids || []).length ? `<div class="thumbs">${ids.map(id => thumb(id)).join('')}</div>` : '';
+const photoMiss = {};
 async function getFile(id) {
-  if (S.photoCache[id] == null) { try { const s = await fb.getDoc(ref('photos/' + id)); S.photoCache[id] = s.exists() ? { data: s.data().data, mime: s.data().mime || 'image/jpeg', name: s.data().name || '' } : ''; } catch (e) { S.photoCache[id] = ''; } }
+  if (!S.photoCache[id]) {
+    try {
+      const s = await fb.getDoc(ref('photos/' + id));
+      if (s.exists()) S.photoCache[id] = { data: s.data().data, mime: s.data().mime || 'image/jpeg', name: s.data().name || '' };
+      else { photoMiss[id] = (photoMiss[id] || 0) + 1; if (photoMiss[id] <= 6) setTimeout(hydratePhotos, 2500); return null; }
+    } catch (e) { photoMiss[id] = (photoMiss[id] || 0) + 1; if (photoMiss[id] <= 6) setTimeout(hydratePhotos, 3000); return null; }
+  }
   if (typeof S.photoCache[id] === 'string' && S.photoCache[id]) S.photoCache[id] = { data: S.photoCache[id], mime: 'image/jpeg', name: '' };
   return S.photoCache[id];
 }
 async function hydratePhotos() {
   document.querySelectorAll('img[data-pid]').forEach(async img => {
-    if (img.getAttribute('src') || img.dataset.done) return; img.dataset.done = '1';
-    const f = await getFile(img.dataset.pid);
-    if (!f) { img.closest('.thumb')?.classList.add('gone'); return; }
+    if (img.getAttribute('src') || img.dataset.busy) return; img.dataset.busy = '1';
+    const f = await getFile(img.dataset.pid); delete img.dataset.busy;
+    if (!f) { if ((photoMiss[img.dataset.pid] || 0) > 6) img.closest('.thumb')?.classList.add('gone'); return; }
     if (/^image\//.test(f.mime)) img.src = f.data;
     else { const b = img.closest('.thumb'); if (b) { b.classList.add('file'); b.innerHTML = `<span class="fname">${CLIP}<br>${esc((f.name || 'ไฟล์').slice(0, 18))}</span>`; } }
   });
@@ -892,7 +899,11 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#sheetR
 async function importJson(file) {
   try {
     const o = JSON.parse(await file.text());
-    const prof = o.profile || {}; const batch = fb.writeBatch(db); let n = 0;
+    const prof = o.profile || {}; let n = 0;
+    // ไฟล์แนบก่อน (เขียนทีละไฟล์ เพราะรูปมีขนาดใหญ่) ข้ามไฟล์ที่มีอยู่แล้ว
+    toast('กำลังนำเข้าไฟล์แนบ...');
+    for (const [id, f] of Object.entries(o.files || {})) { const ex = await fb.getDoc(ref('photos/' + id)).catch(() => null); if (ex && ex.exists()) continue; await put('photos/' + id, { ...f, at: f.at || Date.now(), byUid: S.me.uid, byName: S.me.name }); n++; }
+    const batch = fb.writeBatch(db);
     const pdoc = { profile: prof.profile || defaultProfileDoc().profile, targets: prof.targets || defaultProfileDoc().targets, measurements: prof.measurements || [] };
     if (!/โอ๊ต/.test(pdoc.profile.avoid || '')) pdoc.profile.avoid = 'แพ้ข้าวโอ๊ต (ห้ามโอ๊ตทุกชนิด) · ' + (pdoc.profile.avoid || '');
     if (pdoc.profile.nick === 'นกยูงคนสวย') pdoc.profile.nick = 'Beer';
@@ -902,9 +913,7 @@ async function importJson(file) {
     Object.entries(o.recipes || {}).forEach(([id, r]) => { batch.set(ref('recipes/' + id), r); n++; });
     Object.entries(o.pantry || {}).forEach(([id, r]) => { batch.set(ref('pantry/' + id), r); n++; });
     Object.entries(o.workouts || {}).forEach(([id, r]) => { batch.set(ref('workouts/' + id), r); n++; });
-    await batch.commit();
-    // ไฟล์แนบ (เขียนทีละไฟล์ เพราะรูปมีขนาดใหญ่)
-    for (const [id, f] of Object.entries(o.files || {})) { await put('photos/' + id, { ...f, at: f.at || Date.now(), byUid: S.me.uid, byName: S.me.name }); n++; } toast(`นำเข้าแล้ว ${n} รายการ`);
+    await batch.commit(); toast(`นำเข้าแล้ว ${n} รายการ`);
   } catch (e) { console.error(e); toast('นำเข้าไม่สำเร็จ: ไฟล์ไม่ถูกต้องหรือไม่มีสิทธิ์'); }
 }
 function exportJson() {
