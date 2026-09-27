@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#09111E">
+<title>คู่มือการใช้งาน · Fit Routine by Beer</title>
+<link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@500;600;700&family=Cormorant+Garamond:ital,wght@0,600;1,500&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap">
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#09111E; --surface:#101B2C; --surface2:#0C1624; --ink:#EEF2F7; --muted:#97A5B9; --line:#1F2F47;
+  --accent:#C9A55C; --accent-ink:#191206; --accent-soft:rgba(201,165,92,.14);
+  --good:#5FCB9C; --warn:#E6B04E; --bad:#F27D6A; --pool:#5DB4F0; --pro:#F08E70;
+  --display:'Bai Jamjuree','IBM Plex Sans Thai',system-ui,sans-serif;
+  --serif:'Cormorant Garamond',Georgia,serif;
+  --body:'IBM Plex Sans Thai',system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+html{background:var(--bg);scroll-behavior:smooth;scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 var(--body);-webkit-font-smoothing:antialiased}
+a{color:var(--accent)}
+h1,h2,h3{font-family:var(--display);line-height:1.3;margin:0;text-wrap:balance}
+p{margin:0}
+ul,ol{margin:0;padding-left:1.3em}
+li{margin:3px 0}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+
+/* hero */
+.hero{position:relative;overflow:hidden;min-height:220px;display:flex;align-items:flex-end;border-bottom:1px solid rgba(201,165,92,.35)}
+.hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 45%;filter:saturate(.8) brightness(.9)}
+.hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(9,17,30,.1),rgba(9,17,30,.92)),linear-gradient(90deg,rgba(9,17,30,.6),transparent 60%)}
+.hero-in{position:relative;z-index:1;width:100%;max-width:1100px;margin:0 auto;padding:calc(28px + env(safe-area-inset-top,0px)) 16px 18px}
+.eyebrow{font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--accent);font-weight:600}
+.brand{font-family:var(--serif);font-weight:600;font-size:40px;line-height:1.05;color:#F6F1E6;margin:4px 0 6px}
+.brand em{font-style:italic;font-weight:500;font-size:.55em;color:var(--accent);margin-left:6px}
+.hero-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:5px 12px;border-radius:99px;border:1px solid rgba(201,165,92,.45);background:rgba(9,17,30,.55);color:#E9DDBF;text-decoration:none;backdrop-filter:blur(6px)}
+.chip.pri{background:linear-gradient(180deg,#D8B774,#B8914A);color:var(--accent-ink);border-color:#B8914A;font-weight:600}
+@media (min-width:760px){.brand{font-size:52px}.hero{min-height:260px}}
+
+/* layout */
+.wrap{max-width:1100px;margin:0 auto;padding:18px 16px 80px;display:grid;gap:18px;grid-template-columns:1fr}
+@media (min-width:960px){.wrap{grid-template-columns:240px minmax(0,1fr);align-items:start}}
+nav.toc{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
+nav.toc h2{font-size:13px;letter-spacing:.08em;color:var(--accent);margin-bottom:8px}
+nav.toc ol{list-style:none;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:6px}
+nav.toc a{display:block;text-decoration:none;color:var(--ink);font-size:14px;padding:5px 10px;border-radius:9px;border:1px solid var(--line);background:var(--surface2)}
+nav.toc a:hover{border-color:var(--accent)}
+@media (min-width:960px){nav.toc{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto}nav.toc ol{flex-direction:column;gap:2px}nav.toc a{border:0;background:none;padding:5px 8px}nav.toc a:hover{background:var(--accent-soft)}}
+main{display:flex;flex-direction:column;gap:18px;min-width:0}
+
+section.card{background:linear-gradient(180deg,rgba(255,255,255,.02),transparent 40%),var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px 18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+section.card>h2{font-size:21px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+section.card h3{font-size:16px;color:#F6F1E6;margin-top:6px}
+.num-badge{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:14px;font-weight:700;flex:none}
+.tag{font-family:var(--body);font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:99px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.tag.own{color:var(--accent);border-color:rgba(201,165,92,.5)}
+.tag.tr{color:var(--pool);border-color:rgba(93,180,240,.5)}
+.tag.all{color:var(--good);border-color:rgba(95,203,156,.5)}
+
+.steps{counter-reset:s;list-style:none;padding:0;display:flex;flex-direction:column;gap:8px}
+.steps>li{counter-increment:s;position:relative;padding:10px 12px 10px 46px;background:var(--surface2);border:1px solid var(--line);border-radius:12px;margin:0}
+.steps>li::before{content:counter(s);position:absolute;left:12px;top:10px;width:24px;height:24px;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:13px;display:grid;place-items:center}
+.ui{display:inline-block;font-weight:600;color:#F6F1E6;background:rgba(201,165,92,.12);border:1px solid rgba(201,165,92,.35);border-radius:7px;padding:0 7px;line-height:1.55;white-space:nowrap}
+.tip,.warn{border-radius:12px;padding:10px 14px;font-size:14px}
+.tip{background:rgba(95,203,156,.1);border:1px solid rgba(95,203,156,.35)}
+.warn{background:rgba(230,176,78,.1);border:1px solid rgba(230,176,78,.4)}
+.tip b,.warn b{color:#F6F1E6}
+
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:520px;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--accent);font-weight:600;background:var(--surface2);font-size:13px}
+tr:last-child td{border-bottom:0}
+td .y{color:var(--good);font-weight:700}
+td .n{color:var(--muted)}
+
+.grid{display:grid;gap:12px;grid-template-columns:1fr}
+@media (min-width:700px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.box{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.box h3{margin:0;font-size:15px}
+details{background:var(--surface2);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+details+details{margin-top:0}
+summary{cursor:pointer;font-weight:600;color:#F6F1E6}
+details[open] summary{margin-bottom:6px}
+code{font-family:ui-monospace,Menlo,monospace;font-size:13px;background:var(--surface2);border:1px solid var(--line);border-radius:6px;padding:1px 6px;word-break:break-all}
+.foot{text-align:center;color:var(--muted);font-size:13px}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+</style>
+</head>
+<body>
+<header class="hero">
+  <img src="img/hero-olympic.jpg" alt="">
+  <div class="hero-in">
+    <span class="eyebrow">คู่มือการใช้งาน · User Guide</span>
+    <h1 class="brand">Fit Routine <em>by Beer</em></h1>
+    <p class="muted">ทุกอย่างที่ต้องรู้ สำหรับเจ้าของ เทรนเนอร์ และผู้ติดตาม</p>
+    <div class="hero-row">
+      <a class="chip pri" href="./">← เปิดแอป</a>
+      <a class="chip" href="#start-trainer">เริ่มต้นสำหรับเทรนเนอร์</a>
+      <a class="chip" href="#faq">แก้ปัญหา</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="toc" aria-label="สารบัญ">
+    <h2>สารบัญ</h2>
+    <ol>
+      <li><a href="#roles">1 · ใครทำอะไรได้</a></li>
+      <li><a href="#start-owner">2 · เริ่มต้น (เจ้าของ)</a></li>
+      <li><a href="#start-trainer">3 · เริ่มต้น (เทรนเนอร์)</a></li>
+      <li><a href="#today">4 · หน้าวันนี้</a></li>
+      <li><a href="#train">5 · หน้าเทรน</a></li>
+      <li><a href="#kitchen">6 · หน้าครัว</a></li>
+      <li><a href="#body">7 · หน้าร่างกาย</a></li>
+      <li><a href="#overview">8 · หน้าภาพรวม</a></li>
+      <li><a href="#settings">9 · หน้าตั้งค่า</a></li>
+      <li><a href="#line">10 · แจ้งเตือน LINE</a></li>
+      <li><a href="#evidence">11 · หลักฐานแนบ</a></li>
+      <li><a href="#paste">12 · วางจากอินัง</a></li>
+      <li><a href="#faq">13 · แก้ปัญหา</a></li>
+      <li><a href="#admin">14 · สำหรับผู้ดูแลระบบ</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <!-- 1 -->
+    <section class="card" id="roles">
+      <h2><span class="num-badge">1</span>ใครทำอะไรได้</h2>
+      <p>แอปมีผู้ใช้ 3 แบบ คู่มือนี้ติดป้ายไว้ทุกหัวข้อว่าใครใช้ได้ <span class="tag own">เจ้าของ</span> <span class="tag tr">เทรนเนอร์</span> <span class="tag all">ทุกคน</span></p>
+      <div class="tbl"><table>
+        <thead><tr><th>ทำอะไรได้</th><th>เจ้าของ (Beer)</th><th>เทรนเนอร์</th><th>ผู้ติดตาม</th></tr></thead>
+        <tbody>
+          <tr><td>เข้าใช้ด้วย</td><td>บัญชี Google</td><td>ลิงก์เชิญ + พิมพ์ชื่อ</td><td>ลิงก์เชิญ + พิมพ์ชื่อ</td></tr>
+          <tr><td>ดูข้อมูลทุกหน้า</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td></tr>
+          <tr><td>บันทึกอาหาร น้ำ ออกกำลังกาย ผลวัด ของในครัว</td><td><span class="y">✓</span></td><td><span class="n">ดูได้อย่างเดียว</span></td><td><span class="n">ดูได้อย่างเดียว</span></td></tr>
+          <tr><td>บันทึกการเทรน (ท่า / kg / ครั้ง)</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="n">–</span></td></tr>
+          <tr><td>แก้แผนซ้อมรายสัปดาห์</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="n">–</span></td></tr>
+          <tr><td>ส่งข้อความในทีม + แนบไฟล์</td><td><span class="y">✓</span></td><td><span class="y">✓</span></td><td><span class="y">✓</span></td></tr>
+          <tr><td>เชิญสมาชิก ตั้งค่า LINE นำเข้า/สำรองข้อมูล</td><td><span class="y">✓</span></td><td><span class="n">–</span></td><td><span class="n">–</span></td></tr>
+        </tbody>
+      </table></div>
+      <p class="small muted">นอกจากนี้ยังมีสิทธิ์ <b>อุปกรณ์อื่นของฉัน</b> ซึ่งมีสิทธิ์เท่าเจ้าของ ใช้กับแอปที่เพิ่มไว้บนหน้าจอโฮมของ iPad หรือมือถือ</p>
+    </section>
+
+    <!-- 2 -->
+    <section class="card" id="start-owner">
+      <h2><span class="num-badge">2</span>เริ่มต้นใช้งาน <span class="tag own">เจ้าของ</span></h2>
+      <ol class="steps">
+        <li>เปิดแอปที่ <code>piggybabe-gmail.github.io/fit-routine</code> → กด <span class="ui">เข้าสู่ระบบด้วย Google (เจ้าของ)</span> → เลือกบัญชี Google ของคุณ</li>
+        <li>เข้าครั้งแรก ถ้าหน้าจอขึ้นกล่อง <span class="ui">เริ่มต้นใช้งาน</span> ให้กด <span class="ui">นำเข้าไฟล์ข้อมูลเดิม</span> เพื่อดึงข้อมูลจากแอปเดิม หรือกด <span class="ui">เริ่มจากค่าตั้งต้น</span></li>
+        <li><b>เพิ่มลงหน้าจอโฮม</b> ใน Safari กดปุ่มแชร์ → <span class="ui">เพิ่มไปยังหน้าจอโฮม</span></li>
+        <li>แอปบนหน้าจอโฮมล็อกอินแยกจาก Safari ให้ไปที่ <span class="ui">ตั้งค่า</span> → <span class="ui">สมาชิก</span> → เพิ่มชื่อของคุณ เลือกสิทธิ์ <span class="ui">อุปกรณ์อื่นของฉัน</span> → <span class="ui">คัดลอกลิงก์</span> → เปิดแอปบนหน้าจอโฮม แล้ววางลิงก์ในช่อง <span class="ui">มีลิงก์เชิญ?</span> → <span class="ui">ใช้ลิงก์เชิญ</span> → พิมพ์ชื่อ</li>
+        <li>เชื่อม LINE เพื่อรับแจ้งเตือน: <span class="ui">ตั้งค่า</span> → <span class="ui">บัญชี</span> → <span class="ui">เชื่อม LINE</span> (รายละเอียดอยู่ใน<a href="#line">ข้อ 10</a>)</li>
+        <li>เชิญเทรนเนอร์: <span class="ui">ตั้งค่า</span> → <span class="ui">สมาชิก</span> → พิมพ์ชื่อเทรนเนอร์ → สิทธิ์ <span class="ui">เทรนเนอร์</span> → <span class="ui">เพิ่มสมาชิก</span> → <span class="ui">คัดลอกลิงก์</span> → ส่งลิงก์ให้เทรนเนอร์ทาง LINE</li>
+      </ol>
+      <div class="tip"><b>ชื่อต้องตรงกัน</b> ชื่อที่ตั้งตอนเพิ่มสมาชิก คือชื่อที่เทรนเนอร์ต้องพิมพ์ตอนเข้าใช้ ควรใช้ชื่อสั้นที่พิมพ์ง่าย เช่น "โค้ชบอม"</div>
+    </section>
+
+    <!-- 3 -->
+    <section class="card" id="start-trainer">
+      <h2><span class="num-badge">3</span>เริ่มต้นใช้งาน <span class="tag tr">เทรนเนอร์</span></h2>
+      <p>ส่งส่วนนี้ให้เทรนเนอร์อ่านได้เลย ใช้เวลาประมาณ 2 นาที ไม่ต้องสมัครสมาชิกหรือตั้งรหัสผ่าน</p>
+      <ol class="steps">
+        <li>เปิด <b>ลิงก์เชิญ</b> ที่ได้รับทาง LINE ใน <b>Safari หรือ Chrome</b> (ถ้าลิงก์เปิดในเบราว์เซอร์ของ LINE ให้กด ⋯ → เปิดในเบราว์เซอร์)</li>
+        <li>พิมพ์ชื่อของคุณให้<b>ตรงกับที่เจ้าของตั้งไว้</b> → กด <span class="ui">เข้าใช้งาน</span></li>
+        <li>เชื่อม LINE เพื่อรับแจ้งเตือน: <span class="ui">ตั้งค่า</span> → <span class="ui">บัญชี</span> → <span class="ui">เชื่อม LINE</span> → กด <span class="ui">อนุญาต</span> และ<b>เพิ่มเพื่อน Fit Routine</b> ถ้ามีช่องให้ติ๊ก</li>
+        <li>บันทึกการเทรน: เมนู <span class="ui">เทรน</span> → <span class="ui">+ บันทึกการเทรน</span> → กด <span class="ui">ดึงท่าจากแผน</span> หรือ <span class="ui">ใช้ครั้งก่อน</span> → กรอก kg × ครั้ง ของแต่ละเซ็ต → แนบรูป (ถ้ามี) → <span class="ui">บันทึก</span></li>
+        <li>ปรับแผนซ้อม: <span class="ui">ตั้งค่า</span> → <span class="ui">แผนซ้อม</span> → แก้ท่า เซ็ต ครั้ง kg ของแต่ละวัน ระบบบันทึกให้อัตโนมัติ</li>
+      </ol>
+      <div class="tip"><b>อยากใช้เหมือนแอป</b> หลังเข้าใช้แล้ว กดปุ่มแชร์ → <span class="ui">เพิ่มไปยังหน้าจอโฮม</span> จากนั้นเปิดจากไอคอนได้เลย ถ้าไอคอนถามลิงก์เชิญ ให้วางลิงก์เดิมในช่อง <span class="ui">มีลิงก์เชิญ?</span></div>
+      <div class="warn"><b>ข้อควรระวัง</b> ถ้ากด <span class="ui">ออกจากระบบ</span> ต้องเปิดลิงก์เชิญและพิมพ์ชื่อใหม่อีกครั้ง</div>
+    </section>
+
+    <!-- 4 -->
+    <section class="card" id="today">
+      <h2><span class="num-badge">4</span>หน้า "วันนี้" <span class="tag all">ทุกคนดูได้</span></h2>
+      <p>หน้าหลักของแต่ละวัน ใช้ปุ่ม <span class="ui">‹</span> <span class="ui">›</span> หรือกดที่วันที่เพื่อดูวันอื่น และกด <span class="ui">กลับวันนี้</span> เพื่อกลับมาวันปัจจุบัน</p>
+      <div class="grid">
+        <div class="box"><h3>พลังงานวันนี้</h3><p class="small">ตัวเลขใหญ่คือแคลอรี่ที่ยังกินได้อีก เทียบกับเป้าที่ปรับตามการออกกำลังกายของวันนั้น และมีแถบโปรตีน คาร์บ ไขมัน</p></div>
+        <div class="box"><h3>โปรตีนยังขาด <span class="tag own">เจ้าของ</span></h3><p class="small">เสนอ 2–3 ทางเลือกที่เติมโปรตีนได้ใกล้เป้าที่สุด (รวมเวย์ 30 g/สกู๊ป) กด <span class="ui">กินแล้ว บันทึก</span> แล้วระบบบันทึกให้ทันที หลัง 20:00 จะเสนอเฉพาะกรีกโยเกิร์ตกับมิกซ์เบอร์รี</p></div>
+        <div class="box"><h3>สมดุลแคลอรี่</h3><p class="small">แสดง BMR × กิจกรรม + ออกกำลังกาย = เผาผลาญทั้งวัน พร้อมข้อสังเกตประจำวัน</p></div>
+        <div class="box"><h3>ความเคลื่อนไหวในทีม</h3><p class="small">พิมพ์ข้อความ เช่น "วันนี้ปวดเข่า ขอเบาขา" แนบไฟล์ได้ด้วยปุ่ม 📎 แล้วกด <span class="ui">ส่ง</span> คนในทีมที่เปิดรับจะได้รับแจ้งเตือนทาง LINE</p></div>
+        <div class="box"><h3>น้ำดื่ม <span class="tag own">เจ้าของ</span></h3><p class="small">กด <span class="ui">+ 250 มล.</span> <span class="ui">+ 500 มล.</span> <span class="ui">+ 1 ลิตร</span> กดผิดใช้ <span class="ui">− 250</span> วันที่ออกกำลังกาย เป้าจะเพิ่มอีก 500 มล.</p></div>
+        <div class="box"><h3>แผนวันนี้</h3><p class="small">แสดงคาร์ดิโอและท่าเวทตามแผน ถ้าทำคาร์ดิโอแล้วกด <span class="ui">ทำแล้ว บันทึกเลย</span> ถ้าเป็นวันเวท เทรนเนอร์กด <span class="ui">บันทึกการเทรนวันนี้</span> ได้จากตรงนี้</p></div>
+      </div>
+      <h3>บันทึกอาหาร <span class="tag own">เจ้าของ</span></h3>
+      <ol class="steps">
+        <li>ที่หัวข้อมื้อ (เช้า / กลางวัน / ว่าง / เย็น) กด <span class="ui">+ เพิ่ม</span></li>
+        <li>ถ้ามีรูปอาหาร ฉลาก หรือใบเสร็จ กด <span class="ui">📎 แนบ</span> ก่อน ไฟล์จะผูกกับทุกรายการที่เพิ่มครั้งนี้</li>
+        <li>ค้นหาอาหาร เช่น "ไข่" "ปลา" → ใส่จำนวนหรือกรัม → กด <span class="ui">เพิ่ม</span> หรือเลื่อนลงไปที่ <span class="ui">กรอกเอง</span> ใส่ชื่อ kcal P/C/F เอง (กด <span class="ui">คำนวณ kcal จาก P/C/F</span> ให้คำนวณแคลอรี่ให้ได้)</li>
+        <li>จะแนบรูปทั้งมื้อก็ได้ โดยกด <span class="ui">แนบรูปมื้อนี้</span> ที่หัวข้อมื้อ</li>
+      </ol>
+      <div class="tip"><b>แก้ปริมาณ</b> กดที่รายการอาหาร → เปลี่ยนน้ำหนัก (กรัม) หรือจำนวนเท่า เช่น 0.5 = ครึ่งถุง แล้ว kcal P C F จะคำนวณใหม่ให้เอง จากนั้นกด <span class="ui">บันทึก</span></div>
+      <h3>ออกกำลังกาย <span class="tag own">เจ้าของ</span></h3>
+      <p class="small">กด <span class="ui">+ เพิ่ม</span> → เลือกประเภท (ว่ายน้ำ เดิน ลู่วิ่ง ฯลฯ) → ใส่นาที → ถ้านาฬิกาบอก kcal ให้ใส่ช่อง <span class="ui">kcal จากนาฬิกา</span> ระบบจะใช้ตัวเลขนั้นแทนค่าประมาณ → แนบหน้าจอนาฬิกา → <span class="ui">บันทึก</span></p>
+      <h3>ส่งสรุป</h3>
+      <p class="small"><span class="ui">คัดลอกสรุปวันนี้</span> หรือ <span class="ui">คัดลอกสรุป 7 วัน</span> แล้วนำไปวางในแชตไหนก็ได้ ส่วนเจ้าของกด <span class="ui">ส่งสรุปวันนี้ทาง LINE</span> เพื่อส่งถึงผู้รับทุกคนได้ทันที</p>
+    </section>
+
+    <!-- 5 -->
+    <section class="card" id="train">
+      <h2><span class="num-badge">5</span>หน้า "เทรน" <span class="tag tr">เทรนเนอร์บันทึก</span></h2>
+      <p>รวมทุก session เวทกับเทรนเนอร์ ด้านบนแสดงจำนวน session สะสม จำนวนครั้งในสัปดาห์นี้ และวันที่เทรนครั้งล่าสุด</p>
+      <h3>บันทึกการเทรน</h3>
+      <ol class="steps">
+        <li>กด <span class="ui">+ บันทึกการเทรน</span> → เลือกวันที่ ประเภท (Push / Pull / Legs …) และเวลา</li>
+        <li>กด <span class="ui">ดึงท่าจากแผน</span> เพื่อใส่ท่าจากแผนซ้อมของวันนั้น หรือ <span class="ui">ใช้ครั้งก่อน (ท่า + น้ำหนักเดิม)</span> เพื่อคัดลอก session ประเภทเดียวกันครั้งล่าสุด</li>
+        <li>กรอก <b>kg × ครั้ง</b> ทีละเซ็ต กด <span class="ui">+ เซ็ต</span> <span class="ui">+ เพิ่มท่า</span> ถ้าต้องการเพิ่ม ใส่หมายเหตุรายท่าได้ เช่น "ฟอร์มดีขึ้น"</li>
+        <li>แนบรูปหรือวิดีโอสั้นในช่อง <span class="ui">แนบรูป/ไฟล์การเทรน</span> → กด <span class="ui">บันทึก</span></li>
+      </ol>
+      <div class="grid">
+        <div class="box"><h3>พัฒนาการรายท่า</h3><p class="small">ตารางเทียบครั้งแรกกับครั้งล่าสุดของแต่ละท่า เปลี่ยนแปลงเป็น % โดยคำนวณจาก 1RM โดยประมาณ (สูตร Epley) กดชื่อท่าเพื่อดูกราฟ</p></div>
+        <div class="box"><h3>ประวัติการเทรน</h3><p class="small">ทุก session พร้อมปริมาณรวม (kg × ครั้ง) กด <span class="ui">แก้ไข</span> เพื่อแก้ หรือกด <span class="ui">ใช้เป็นแม่แบบวันนี้</span> เพื่อเริ่มบันทึกวันนี้จาก session นั้น</p></div>
+      </div>
+    </section>
+
+    <!-- 6 -->
+    <section class="card" id="kitchen">
+      <h2><span class="num-badge">6</span>หน้า "ครัว" <span class="tag all">ทุกคนดูได้</span></h2>
+      <div class="grid">
+        <div class="box"><h3>สมุดเมนูของฉัน</h3><p class="small">เมนูที่เก็บไว้ทำซ้ำ มีวัตถุดิบ วิธีทำ และรูปผลงาน กรองตามมื้อได้ เลือกมื้อแล้วกด <span class="ui">กินเมนูนี้ · บันทึก</span> ระบบบันทึกอาหารให้ทันที กด <span class="ui">เพิ่มรูปผลงาน</span> เพื่อเก็บรูปที่ทำจริง</p></div>
+        <div class="box"><h3>ของในครัว <span class="tag own">เจ้าของ</span></h3><p class="small">ใส่จำนวนแล้วกด <span class="ui">ใช้ไป</span> หรือ <span class="ui">เติม</span> แอปคำนวณการใช้เฉลี่ยต่อวันและวันที่ของจะหมด ของที่ใกล้หมดจะขึ้นในแถบ <b>ควรซื้อเพิ่ม</b> กด <span class="ui">เพิ่มวัตถุดิบ</span> เพื่อลงของใหม่พร้อมรูปใบเสร็จ</p></div>
+        <div class="box"><h3>วันนี้ทำอะไรกินดี</h3><p class="small">พิมพ์ของที่มี (หรือปล่อยว่างเพื่อใช้ของในครัว) → <span class="ui">หาเมนูจากของที่มี</span> แอปจะบอกว่ามีอะไรครบแล้ว (✓) และขาดอะไร (+) กด <span class="ui">เก็บลงสมุดเมนู</span> ถ้าชอบเมนูนั้น</p></div>
+        <div class="box"><h3>เมนูทั้งวันตามเป้า</h3><p class="small">เลือก <span class="ui">วันซ้อม</span> หรือ <span class="ui">วันพัก</span> แอปจัดเมนู 4 มื้อให้ตรงเป้า kcal และโปรตีน ถ้าไม่ชอบกด <span class="ui">สุ่มเมนูใหม่</span> ถ้าจะกินตามนี้กด <span class="ui">เพิ่มทั้งหมดลงบันทึก</span></p></div>
+      </div>
+      <div class="warn"><b>ข้อจำกัดอาหาร</b> เมนูที่แอปแนะนำไม่ใช้ข้าวโอ๊ต เนื้อวัว หมู และไก่ ตามข้อมูลในหน้าร่างกาย → <span class="ui">อาหารที่แพ้ / เลี่ยง</span></div>
+    </section>
+
+    <!-- 7 -->
+    <section class="card" id="body">
+      <h2><span class="num-badge">7</span>หน้า "ร่างกาย" <span class="tag all">ทุกคนดูได้</span></h2>
+      <ul>
+        <li><b>ร่างกายตอนนี้</b> แสดงน้ำหนัก มวลกล้ามเนื้อ (SMM) ไขมัน % BMI BMR และ TDEE วันซ้อม รวมทั้งเวลาที่คาดว่าจะถึงเป้ากล้ามเนื้อ</li>
+        <li><b>ข้อมูลพื้นฐาน</b> <span class="tag own">เจ้าของ</span> ชื่อ อายุ ส่วนสูง เวลากินมื้อสุดท้าย อาหารที่แพ้/เลี่ยง ข้อจำกัดร่างกาย ข้อมูลส่วนนี้ใช้คำนวณและแนะนำเมนู</li>
+        <li><b>สัดส่วนร่างกาย</b> ตารางเทียบครั้งแรกกับล่าสุดของทุกจุดวัด</li>
+        <li><b>แนวโน้ม</b> กราฟน้ำหนัก มวลกล้ามเนื้อ ไขมัน % และรอบเอว พร้อมเส้นเป้าหมาย</li>
+        <li><b>ประวัติผลวัด</b> ทุกครั้งที่วัด พร้อมป้ายหลักฐาน</li>
+      </ul>
+      <h3>เพิ่มผลวัด <span class="tag own">เจ้าของ</span></h3>
+      <ol class="steps">
+        <li>เลือกวันที่วัด → กรอกค่าจากใบ InBody (น้ำหนัก SMM ไขมัน kg/% BMR ไขมันช่องท้อง น้ำในร่างกาย) กรอกเฉพาะค่าที่มีก็ได้</li>
+        <li>ถ้าวัดด้วยสายวัด เปิด <span class="ui">สัดส่วนร่างกาย (สายวัด)</span> → เลือก <span class="ui">cm</span> หรือ <span class="ui">นิ้ว (แปลงให้)</span> → กรอกตัวเลข</li>
+        <li>กด <span class="ui">แนบใบผลวัด (รูป/PDF)</span> → <span class="ui">บันทึกผลวัด</span></li>
+      </ol>
+    </section>
+
+    <!-- 8 -->
+    <section class="card" id="overview">
+      <h2><span class="num-badge">8</span>หน้า "ภาพรวม" <span class="tag all">ทุกคนดูได้</span></h2>
+      <ul>
+        <li><b>กราฟสมดุลแคลอรี่ 14 วัน</b> แท่งทองคือขาดดุล (ลดไขมัน) แท่งส้มคือเกินดุล จุดเขียวใต้แท่งคือวันที่โปรตีนถึงเป้า</li>
+        <li><b>สรุปตัวเลข</b> จำนวนวันที่บันทึก ค่าเฉลี่ยที่กิน โปรตีนเฉลี่ย โปรตีนที่ขาดต่อวัน จำนวนครั้งที่เทรน และไขมันที่เปลี่ยนโดยประมาณ</li>
+        <li><b>ตารางรายวัน</b> มีคอลัมน์ <b>หลักฐาน</b> บอกจำนวนรายการที่แนบไฟล์ เช่น 5/6 กด <span class="ui">เปิด</span> เพื่อไปดูวันนั้น</li>
+      </ul>
+    </section>
+
+    <!-- 9 -->
+    <section class="card" id="settings">
+      <h2><span class="num-badge">9</span>หน้า "ตั้งค่า"</h2>
+      <div class="tbl"><table>
+        <thead><tr><th>ปุ่ม</th><th>ใช้ทำอะไร</th><th>ใครเห็น</th></tr></thead>
+        <tbody>
+          <tr><td><span class="ui">เป้าหมาย</span></td><td>ระดับกิจกรรม เป้าแคลอรี่ (ลด/คง/เพิ่ม หรือกำหนดเอง) TDEE จากเทรนเนอร์ เป้าน้ำ สัดส่วน P/C/F และเป้ากล้ามเนื้อ/ไขมัน</td><td>ทุกคน (แก้ได้เฉพาะเจ้าของ)</td></tr>
+          <tr><td><span class="ui">แผนซ้อม</span></td><td>แผนรายสัปดาห์ จันทร์–อาทิตย์ คาร์ดิโอ ท่าเวท เซ็ต ครั้ง kg</td><td>ทุกคน (แก้ได้: เจ้าของ + เทรนเนอร์)</td></tr>
+          <tr><td><span class="ui">สมาชิก</span></td><td>เพิ่มสมาชิก คัดลอกลิงก์เชิญ ปิด/เปิดสิทธิ์ สร้างลิงก์ใหม่ ออกจากทุกอุปกรณ์</td><td>เจ้าของ</td></tr>
+          <tr><td><span class="ui">LINE</span></td><td>เชื่อมระบบแจ้งเตือน และเลือกว่าใครได้รับเรื่องอะไร</td><td>เจ้าของ</td></tr>
+          <tr><td><span class="ui">ข้อมูล</span></td><td>นำเข้าไฟล์ .json · <span class="ui">ดาวน์โหลดสำรองข้อมูล</span> · เปิดช่องวางจากอินัง</td><td>เจ้าของ</td></tr>
+          <tr><td><span class="ui">บัญชี</span></td><td>เชื่อม LINE ของตัวเอง ส่งข้อความทดสอบ ออกจากระบบ</td><td>ทุกคน</td></tr>
+        </tbody>
+      </table></div>
+      <h3>จัดการสมาชิก <span class="tag own">เจ้าของ</span></h3>
+      <ul>
+        <li><span class="ui">ปิดสิทธิ์</span> หยุดการเข้าถึงชั่วคราว กด <span class="ui">เปิดสิทธิ์</span> เพื่อให้กลับมาใช้ได้</li>
+        <li><span class="ui">สร้างลิงก์ใหม่</span> ใช้เมื่อลิงก์เชิญหลุดไปถึงคนอื่น ลิงก์เดิมจะใช้ไม่ได้ทันที</li>
+        <li><span class="ui">ออกจากทุกอุปกรณ์</span> ทุกเครื่องที่สมาชิกคนนั้นเคยเข้าจะหลุดออก และต้องใช้ลิงก์เชิญเข้าใหม่</li>
+      </ul>
+      <div class="tip"><b>สำรองข้อมูลเดือนละครั้ง</b> <span class="ui">ตั้งค่า</span> → <span class="ui">ข้อมูล</span> → <span class="ui">ดาวน์โหลดสำรองข้อมูล</span> เก็บไฟล์ไว้ใน iCloud หรือ Google Drive (<b>ห้าม</b>อัปโหลดไฟล์นี้ขึ้น GitHub เพราะ repo เป็นสาธารณะ)</div>
+    </section>
+
+    <!-- 10 -->
+    <section class="card" id="line">
+      <h2><span class="num-badge">10</span>แจ้งเตือน LINE</h2>
+      <p>แจ้งเตือนจะส่งเป็นแชต 1:1 จากบัญชี LINE <b>Fit Routine</b> ถึงแต่ละคน ไม่ต้องสร้างกลุ่ม</p>
+      <h3>เชื่อม LINE ของตัวเอง <span class="tag all">ทุกคน</span></h3>
+      <ol class="steps">
+        <li><span class="ui">ตั้งค่า</span> → <span class="ui">บัญชี</span> → <span class="ui">เชื่อม LINE</span></li>
+        <li>LINE จะเปิดหน้าขออนุญาต → กด <span class="ui">อนุญาต</span> ถ้ามีหน้าชวนเพิ่มเพื่อน Fit Routine ให้กดเพิ่มเพื่อน (ถ้าเป็นเพื่อนอยู่แล้วจะขึ้นว่า "เพิ่มเพื่อนแล้ว" ให้กด <span class="ui">กลับ</span>)</li>
+        <li>ขึ้นหน้า <b>เชื่อม LINE สำเร็จ ✅</b> → กด <span class="ui">กลับไปที่ Fit Routine</span></li>
+        <li>จะได้รับข้อความใน LINE ว่า "เชื่อม LINE กับ Fit Routine แล้ว ✅" กด <span class="ui">ส่งข้อความทดสอบถึงฉัน</span> เพื่อลองได้</li>
+      </ol>
+      <h3>เลือกว่าใครได้รับเรื่องอะไร <span class="tag own">เจ้าของ</span></h3>
+      <p class="small"><span class="ui">ตั้งค่า</span> → <span class="ui">LINE</span> → กล่อง <b>ใครได้รับอะไร</b> ติ๊ก <span class="ui">อนุญาต/รับแจ้งเตือน</span> ของแต่ละคน แล้วกดเลือกหัวข้อ (ปุ่มสีทอง = รับ)</p>
+      <div class="tbl"><table>
+        <thead><tr><th>หัวข้อ</th><th>ส่งเมื่อ</th><th>ค่าเริ่มต้น</th></tr></thead>
+        <tbody>
+          <tr><td>อาหาร</td><td>บันทึกหรือแก้รายการอาหาร</td><td>เทรนเนอร์</td></tr>
+          <tr><td>การเทรน</td><td>เทรนเนอร์บันทึกหรือแก้ session เวท</td><td>เจ้าของ</td></tr>
+          <tr><td>ออกกำลังกาย</td><td>บันทึกคาร์ดิโอหรือออกกำลังกายอื่น</td><td>เทรนเนอร์</td></tr>
+          <tr><td>ผลวัดร่างกาย</td><td>บันทึกผล InBody หรือสายวัด</td><td>เทรนเนอร์</td></tr>
+          <tr><td>ข้อความในทีม</td><td>มีคนส่งข้อความในหน้าวันนี้</td><td>ทุกคน</td></tr>
+          <tr><td>เมนู/ครัว</td><td>เพิ่มเมนูลงสมุดเมนู</td><td>ปิดไว้</td></tr>
+        </tbody>
+      </table></div>
+      <ul class="small">
+        <li>คนที่เป็นผู้อัปเดตจะไม่ได้รับแจ้งเตือนเรื่องของตัวเอง</li>
+        <li>การอัปเดตหลายรายการภายใน 45 วินาที จะรวมเป็นข้อความเดียว เพื่อประหยัดโควตา</li>
+        <li>บัญชี LINE แบบฟรีส่งได้ประมาณ 300 ข้อความต่อเดือน</li>
+        <li>ถ้าจะหยุดแจ้งเตือนของใคร ให้เอาติ๊ก <span class="ui">อนุญาต/รับแจ้งเตือน</span> ออก หรือกด <span class="ui">ยกเลิกการเชื่อม</span></li>
+      </ul>
+    </section>
+
+    <!-- 11 -->
+    <section class="card" id="evidence">
+      <h2><span class="num-badge">11</span>หลักฐานแนบ <span class="tag all">ทุกคน</span></h2>
+      <p>ทุกจุดที่บันทึกข้อมูลมีปุ่ม 📎 ไว้แนบไฟล์ <b>เพื่ออ้างอิงว่าทำจริง</b> แอปไม่อ่านหรือวิเคราะห์ไฟล์ เก็บไว้ให้ดูเท่านั้น</p>
+      <div class="tbl"><table>
+        <thead><tr><th>ที่</th><th>ควรแนบอะไร</th></tr></thead>
+        <tbody>
+          <tr><td>อาหาร</td><td>รูปอาหาร ฉลากโภชนาการ ใบเสร็จ (แนบทั้งมื้อหรือแนบรายรายการก็ได้)</td></tr>
+          <tr><td>ออกกำลังกาย</td><td>หน้าจอนาฬิกา หรือแอปว่ายน้ำ</td></tr>
+          <tr><td>การเทรน</td><td>รูปหรือไฟล์จากเทรนเนอร์ในแต่ละ session</td></tr>
+          <tr><td>ผลวัด</td><td>ใบ InBody (รูปหรือ PDF) รูปสายวัด</td></tr>
+          <tr><td>น้ำดื่ม · ของในครัว · เมนู · ข้อความ</td><td>รูปขวดน้ำ ใบเสร็จ รูปเมนูที่ทำ ไฟล์ประกอบข้อความ</td></tr>
+        </tbody>
+      </table></div>
+      <ul class="small">
+        <li>รายการที่มีไฟล์แนบจะมีป้ายสีเขียว รายการที่ยังไม่มีจะขึ้นว่า "ไม่มีหลักฐาน"</li>
+        <li>หน้าวันนี้ หน้าภาพรวม และสรุปที่ส่งให้เทรนเนอร์ จะบอกสัดส่วนรายการที่มีหลักฐาน เช่น 5/6</li>
+        <li>รูปจะถูกย่ออัตโนมัติ ไฟล์อื่น (เช่น PDF) ต้องไม่เกิน 700 KB</li>
+        <li>แตะรูปเล็กเพื่อดูรูปใหญ่</li>
+      </ul>
+    </section>
+
+    <!-- 12 -->
+    <section class="card" id="paste">
+      <h2><span class="num-badge">12</span>วางจากอินัง <span class="tag own">เจ้าของ</span></h2>
+      <p>ส่งรูปอาหารหรือเล่าว่ากินอะไร/ออกกำลังกายอะไร ในแชตกับอินัง (Claude) แล้วอินังจะตอบเป็นข้อความที่ขึ้นต้นด้วย <code>FIT1 {…}</code></p>
+      <ol class="steps">
+        <li>ก๊อปข้อความ <code>FIT1</code> ทั้งก้อนจากแชต</li>
+        <li>ในแอป หน้าวันนี้ กด <span class="ui">วางจากอินัง</span> → วางข้อความ</li>
+        <li>กด <span class="ui">📎 แนบ</span> ใส่รูปเดียวกับที่ส่งให้อินัง เพื่อเก็บเป็นหลักฐาน</li>
+        <li>กด <span class="ui">ตรวจสอบ</span> ดูรายการที่จะนำเข้า → กด <span class="ui">นำเข้า</span></li>
+      </ol>
+      <p class="small muted">นำเข้าได้ทั้งอาหาร ออกกำลังกาย น้ำ ของเข้า/ออกครัว ผลวัด และเมนูใหม่ลงสมุดเมนู</p>
+    </section>
+
+    <!-- 13 -->
+    <section class="card" id="faq">
+      <h2><span class="num-badge">13</span>แก้ปัญหาที่พบบ่อย</h2>
+      <details><summary>รูปหลักฐานไม่ขึ้น เห็นแค่ปุ่มเขียว</summary><p class="small">ดึงหน้าจอลงเพื่อรีเฟรช หรือกดปุ่มรีเฟรชของเบราว์เซอร์ ถ้าเน็ตช้ารูปจะโหลดตามมาทีหลัง ถ้ายังไม่ขึ้น ให้ปิดแอปแล้วเปิดใหม่</p></details>
+      <details><summary>เทรนเนอร์เข้าไม่ได้ ขึ้นว่าชื่อไม่ตรง</summary><p class="small">ชื่อต้องพิมพ์ตรงกับที่เจ้าของตั้งไว้ใน <span class="ui">ตั้งค่า</span> → <span class="ui">สมาชิก</span> (เว้นวรรคได้ ตัวพิมพ์เล็ก/ใหญ่ไม่มีผล) และสิทธิ์ต้องไม่ถูกปิดอยู่</p></details>
+      <details><summary>ลิงก์เชิญหลุดไปถึงคนอื่น</summary><p class="small">กด <span class="ui">สร้างลิงก์ใหม่</span> ที่สมาชิกคนนั้น ลิงก์เดิมจะใช้ไม่ได้ทันที แล้วส่งลิงก์ใหม่ให้คนที่ถูกต้อง ถ้ามีคนแปลกหน้าเข้ามาแล้ว ให้กด <span class="ui">ออกจากทุกอุปกรณ์</span> ด้วย</p></details>
+      <details><summary>ไม่ได้รับแจ้งเตือนใน LINE</summary><ul class="small"><li>ตรวจว่าเชื่อม LINE แล้ว (<span class="ui">ตั้งค่า</span> → <span class="ui">LINE</span> ชื่อคนนั้นต้องมีป้ายสีเขียว "LINE: …")</li><li>ต้องเป็นเพื่อนกับ Fit Routine และไม่ได้บล็อก</li><li>ต้องติ๊ก <span class="ui">อนุญาต/รับแจ้งเตือน</span> และเลือกหัวข้อนั้นไว้</li><li>รอประมาณ 45 วินาที เพราะระบบรวมข้อความก่อนส่ง</li><li>กด <span class="ui">ตรวจการเชื่อมต่อ</span> ต้องขึ้น ✓ ครบทุกตัว</li></ul></details>
+      <details><summary>กดเข้าสู่ระบบด้วย Google แล้วไม่มีอะไรเกิดขึ้น</summary><p class="small">Safari อาจบล็อกหน้าต่างป๊อปอัป ให้ไปที่ การตั้งค่า iPad → Safari → ปิด "บล็อกป๊อปอัป" แล้วลองใหม่</p></details>
+      <details><summary>แอปบนหน้าจอโฮมให้ล็อกอินใหม่</summary><p class="small">เป็นเรื่องปกติของ iPhone/iPad เพราะแอปบนหน้าจอโฮมแยกข้อมูลจาก Safari ให้ใช้ลิงก์สิทธิ์ <span class="ui">อุปกรณ์อื่นของฉัน</span> ตาม<a href="#start-owner">ข้อ 2</a></p></details>
+      <details><summary>เน็ตหลุดตอนบันทึก</summary><p class="small">แอปเก็บข้อมูลไว้ในเครื่องก่อน แล้วซิงก์ขึ้นระบบเองเมื่อเน็ตกลับมา อย่าเพิ่งล้างข้อมูลเว็บไซต์ของเบราว์เซอร์จนกว่าจะออนไลน์</p></details>
+      <details><summary>ขึ้นว่า "คุณไม่มีสิทธิ์แก้ข้อมูลส่วนนี้"</summary><p class="small">บัญชีนั้นไม่มีสิทธิ์แก้ข้อมูลส่วนนั้น เช่น เทรนเนอร์แก้บันทึกอาหารไม่ได้ ดูตารางสิทธิ์ใน<a href="#roles">ข้อ 1</a></p></details>
+    </section>
+
+    <!-- 14 -->
+    <section class="card" id="admin">
+      <h2><span class="num-badge">14</span>สำหรับผู้ดูแลระบบ <span class="tag own">เจ้าของ</span></h2>
+      <p class="small">ส่วนประกอบของระบบทั้งหมด ใช้แผนฟรีทุกตัว</p>
+      <div class="tbl"><table>
+        <thead><tr><th>ส่วน</th><th>อยู่ที่</th><th>หมายเหตุ</th></tr></thead>
+        <tbody>
+          <tr><td>หน้าเว็บ</td><td>GitHub repo <code>piggybabe-gmail/fit-routine</code> → GitHub Pages</td><td>repo เป็นสาธารณะ ห้ามใส่รหัสลับหรือไฟล์สำรองข้อมูล</td></tr>
+          <tr><td>ฐานข้อมูลและล็อกอิน</td><td>Firebase โปรเจกต์ <code>fit-routine-beer</code></td><td>สิทธิ์การเข้าถึงคุมด้วย Firestore Rules ห้ามเปิด Auto clean-up ของ Anonymous auth เพราะเทรนเนอร์จะหลุดทุก 30 วัน</td></tr>
+          <tr><td>ตัวส่ง LINE</td><td>Google Apps Script <b>Fit Routine LINE</b></td><td>เก็บ LINE_TOKEN, APP_SECRET, LOGIN_CHANNEL_ID, LOGIN_CHANNEL_SECRET ไว้ใน Script properties</td></tr>
+          <tr><td>บัญชี LINE</td><td>LINE Official Account <b>Fit Routine</b> + LINE Login channel (Provider: Fit Routine)</td><td>จัดการที่ manager.line.biz และ developers.line.biz</td></tr>
+        </tbody>
+      </table></div>
+      <div class="warn"><b>แก้โค้ด Apps Script แล้ว</b> ต้องกด <span class="ui">การทำให้ใช้งานได้</span> → <span class="ui">จัดการการทำให้ใช้งานได้</span> → ✏️ → เวอร์ชัน <span class="ui">เวอร์ชันใหม่</span> → <span class="ui">ทำให้ใช้งานได้</span> จึงจะใช้ URL เดิมได้ ถ้าสร้าง deployment ใหม่ URL จะเปลี่ยน และต้องแก้ URL ใหม่ทั้งในแอป, Callback URL ของ LINE Login และ Webhook ของ OA</div>
+      <p class="small muted">คู่มือตั้งค่าระบบฉบับเต็ม (สำหรับติดตั้งใหม่) อยู่ในไฟล์ README ของ repo · <a href="privacy.html">นโยบายความเป็นส่วนตัว</a></p>
+    </section>
+
+    <p class="foot">Fit Routine by Beer · คู่มือปรับปรุงล่าสุด 27 กันยายน 2569 · <a href="./">กลับไปที่แอป</a></p>
+  </main>
+</div>
+</body>
+</html>

@@ -658,7 +658,7 @@ function setMembers() {
   const list = Object.entries(S.members);
   const devs = id => Object.values(S.devices).filter(d => d.memberId === id).length;
   return `<section class="card"><h2>สมาชิกในทีม</h2>
-   <p class="small muted">เพิ่มชื่อเทรนเนอร์ แล้วส่ง "ลิงก์เชิญ" ให้ทาง LINE เทรนเนอร์เปิดลิงก์แล้วพิมพ์ชื่อให้ตรงกับที่ตั้งไว้ ไม่ต้องใช้รหัสผ่าน</p>
+   <p class="small muted">เพิ่มชื่อเทรนเนอร์ แล้วส่ง "ลิงก์เชิญ" ให้ทาง LINE เทรนเนอร์เปิดลิงก์แล้วพิมพ์ชื่อให้ตรงกับที่ตั้งไว้ ไม่ต้องใช้รหัสผ่าน · ส่ง<a href="manual.html#start-trainer" target="_blank">คู่มือสำหรับเทรนเนอร์</a>ไปด้วยได้</p>
    ${list.length ? list.map(([id, m]) => `<div class="choice" style="flex-direction:column;align-items:stretch">
     <div class="row between"><div><b>${esc(m.name)}</b> <span class="pill plain">${ROLE_TH[m.role]}</span> ${m.active ? '' : '<span class="pill adjust">ปิดสิทธิ์</span>'}</div><span class="small muted">${devs(id)} อุปกรณ์</span></div>
     <div class="row" style="flex-wrap:nowrap"><input readonly value="${esc(inviteLink(id, m))}" id="inv_${id}"><button class="btn sm pri" data-act="copyInv" data-id="${id}">คัดลอกลิงก์</button></div>
@@ -697,7 +697,7 @@ function setData() {
 }
 function setAccount() {
   if ((S.config || {}).lineUrl && !ui.lineInfo) lineInfo();
-  return `${lineLinkCard()}<section class="card"><h2>บัญชี</h2><p>${esc(S.me.name)} · ${ROLE_TH[S.me.role]}${S.me.email ? ` · ${esc(S.me.email)}` : ''}</p><button class="btn danger" data-act="signOut">ออกจากระบบ</button></section>`;
+  return `${lineLinkCard()}<section class="card"><h2>บัญชี</h2><p>${esc(S.me.name)} · ${ROLE_TH[S.me.role]}${S.me.email ? ` · ${esc(S.me.email)}` : ''}</p><div class="row"><a class="btn" href="manual.html">📖 คู่มือการใช้งาน</a><button class="btn danger" data-act="signOut">ออกจากระบบ</button></div></section>`;
 }
 
 /* ============ sheets ============ */

@@ -268,3 +268,5 @@ ul.feed .txt{grid-column:1/-1;overflow-wrap:anywhere}
 .item + .thumbs{margin-top:-2px;margin-bottom:4px}
 
 .chip-sync:empty{display:none}
+.chip-link{text-decoration:none}.chip-link:hover{border-color:var(--accent);color:#F6F1E6}
+a.btn{text-decoration:none}
