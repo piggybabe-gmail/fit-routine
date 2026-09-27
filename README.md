@@ -51,7 +51,7 @@
 3. **Apps Script:** https://script.new → วางไฟล์ `line-relay/Code.gs` → Deploy → New deployment → Web app · Execute as **Me** · Who has access **Anyone** → คัดลอก Web app URL
 4. **LINE Login channel:** ใน Provider เดียวกัน → Create a new channel → **LINE Login** → App types: **Web app**
    - แท็บ LINE Login → Callback URL = Web app URL จากข้อ 3
-   - แท็บ Basic settings → Linked LINE Official Account = Fit Routine
+   - แท็บ Basic settings → Linked LINE Official Account = Fit Routine · Privacy policy URL = `https://<ชื่อผู้ใช้>.github.io/fit-routine/privacy.html`
    - เปลี่ยนสถานะจาก Developing เป็น **Published**
 5. **Script properties** (Apps Script → รูปเฟือง): `LINE_TOKEN`, `APP_SECRET`, `LOGIN_CHANNEL_ID`, `LOGIN_CHANNEL_SECRET`
 6. Messaging API → Webhook URL = Web app URL → เปิด Use webhook
