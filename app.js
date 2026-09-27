@@ -775,12 +775,55 @@ function exSheet(id) {
 }
 function pasteSheet() {
   openSheet(`<div class="sheet-h"><h3>วางจากอินัง</h3><button class="btn sm" data-act="close">ปิด</button></div>
-  <p class="small muted">ก๊อปข้อความที่ขึ้นต้นด้วย <b>FIT1</b> จากแชตกับอินัง แล้ววางด้านล่าง</p>
-  <textarea id="pasteText" rows="6" placeholder="FIT1 {…}"></textarea>
+  <p class="small muted">วางข้อความสรุปอาหารจากแชตกับอินังได้เลย ทั้งแบบข้อความธรรมดา (เช่น "ข้าวสวย 220 กรัม → 286 kcal · โปรตีน 5 g") หรือแบบ <b>FIT1</b></p>
+  <div class="small muted">นำเข้าเป็นมื้อ</div>
+  <div class="seg" id="pasteMeal">${[['auto', 'ตามข้อความ'], ...MEALS.map(m => [m, m])].map(([k, l]) => `<button aria-pressed="${(ui.pasteMeal || 'auto') === k}" data-act="pasteMeal" data-v="${k}">${l}</button>`).join('')}</div>
+  <textarea id="pasteText" rows="6" placeholder="วางข้อความจากอินังที่นี่"></textarea>
   <div class="choice"><div class="small">${CLIP} <b>แนบหลักฐาน</b> <span class="muted">รูปอาหารหรือหน้าจอนาฬิกาที่ส่งให้อินัง จะผูกกับทุกรายการที่นำเข้า</span></div>${attachBtn('add', 'แนบ')}</div><div id="addFilesBox">${thumbs(ui.addFiles)}</div>
   <div class="row"><button class="btn" data-act="pastePreview">ตรวจสอบ</button><button class="btn pri" data-act="pasteApply" ${ui.pasted ? '' : 'disabled'}>นำเข้า</button></div><div id="pasteOut">${ui.pasted ? pastePreviewHtml(ui.pasted) : ''}</div>`);
 }
-function parsePaste(txt) { const i = txt.indexOf('FIT1'); if (i < 0) throw new Error('ไม่พบคำว่า FIT1'); const a = txt.indexOf('{', i), b = txt.lastIndexOf('}'); if (a < 0 || b < a) throw new Error('รูปแบบข้อมูลไม่ครบ'); return JSON.parse(txt.slice(a, b + 1)); }
+function parsePaste(txt) {
+  const i = txt.indexOf('FIT1');
+  if (i < 0) return parseFreeText(txt);
+  const a = txt.indexOf('{', i), b = txt.lastIndexOf('}'); if (a < 0 || b < a) throw new Error('รูปแบบข้อมูลไม่ครบ'); return JSON.parse(txt.slice(a, b + 1));
+}
+/* อ่านข้อความสรุปโภชนาการธรรมดา เช่น "ข้าวสวย 220 กรัม → ประมาณ 286 kcal / โปรตีน ~5 g / คาร์บ ~64 g / ไขมัน ~1 g" */
+const NUM = '(\\d[\\d,]*(?:\\.\\d+)?)(?:\\s*(?:-|–|—|ถึง)\\s*(\\d[\\d,]*(?:\\.\\d+)?))?';
+function pickNum(m, k) { if (!m) return null; const a = parseFloat(m[k].replace(/,/g, '')), b = m[k + 1] ? parseFloat(m[k + 1].replace(/,/g, '')) : null; return b != null ? (a + b) / 2 : a; }
+const RX_KCAL = new RegExp(NUM + '\\s*(?:kcal|kcals|แคล(?:อรี่|อรี)?|กิโลแคลอรี่|cal)', 'i');
+const RX_MAC = { p: new RegExp('(?:โปรตีน|protein|(?:^|[\\s·,|(/])P)\\s*[:：=]?\\s*(?:[~≈]|ประมาณ|ราว)?\\s*' + NUM + '\\s*(?:g|กรัม)?', 'i'), c: new RegExp('(?:คาร์โบไฮเดรต|คาร์บ|คาร์โบ|carbs?|(?:^|[\\s·,|(/])C)\\s*[:：=]?\\s*(?:[~≈]|ประมาณ|ราว)?\\s*' + NUM + '\\s*(?:g|กรัม)?', 'i'), f: new RegExp('(?:ไขมัน|fat|(?:^|[\\s·,|(/])F)\\s*[:：=]?\\s*(?:[~≈]|ประมาณ|ราว)?\\s*' + NUM + '\\s*(?:g|กรัม)?', 'i') };
+const RX_QTY = /(\d+(?:\.\d+)?)\s*(กรัม|g\b|ฟอง|ชิ้น|ถ้วย|จาน|ชาม|ช้อนโต๊ะ|ช้อนชา|ช้อน|แก้ว|มล\.?|ml|สกู๊ป|ลูก|แผ่น|ขีด|ถุง|กล่อง)/i;
+const MEAL_WORDS = [[/เช้า|breakfast/i, 'เช้า'], [/กลางวัน|เที่ยง|lunch/i, 'กลางวัน'], [/ว่าง|บ่าย|snack/i, 'ว่าง'], [/เย็น|ค่ำ|dinner/i, 'เย็น']];
+function parseFreeText(txt) {
+  const lines = String(txt).split(/\r?\n/).map(l => l.replace(/[*_`#>]/g, '').replace(/^\s*(?:[-•·▪◦●]|\d+[.)])\s+/, '').trim()).filter(Boolean);
+  const items = []; let cur = null, meal = null, inTotal = false;
+  for (const line of lines) {
+    const isTotal = /รวม|ทั้งหมด|total|สรุป/i.test(line);
+    const mw = MEAL_WORDS.find(([rx]) => rx.test(line));
+    const mh = mw && line.length < 30 && !RX_KCAL.test(line) && !Object.values(RX_MAC).some(r => r.test(line)) && /มื้อ|^\S+\s*[:：]?$|breakfast|lunch|dinner|snack/i.test(line);
+    if (mh) { meal = mw[1]; cur = null; inTotal = false; continue; }
+    const k = pickNum(line.match(RX_KCAL), 1);
+    const mac = {}; for (const key of ['p', 'c', 'f']) { const v = pickNum(line.match(RX_MAC[key]), 1); if (v != null) mac[key] = v; }
+    const hasMac = Object.keys(mac).length > 0;
+    const head = line.split(/→|->|=>|:|：|\s[—–-]\s|\s=\s/)[0];
+    let label = (head === line ? line.split(/≈|ประมาณ|\d[\d,.]*\s*(?:kcal|แคล)/i)[0] : head).trim();
+    const labelIsMacro = /^(?:โปรตีน|protein|คาร์บ|คาร์โบ|carb|ไขมัน|fat|พลังงาน|kcal|P|C|F)\b/i.test(label) || /^(?:โปรตีน|คาร์บ|คาร์โบไฮเดรต|ไขมัน|พลังงาน)/.test(label);
+    if (isTotal && (k != null || hasMac || /รวม/.test(line))) { inTotal = true; cur = null; continue; }
+    if (k != null && !labelIsMacro && label && !/^\d/.test(label.replace(RX_QTY, '').trim() || 'x')) {
+      inTotal = false; const q = label.match(/(\d+(?:\.\d+)?)\s*(กรัม|g\b)/i) || label.match(RX_QTY);
+      const name = label.replace(/\(.*?\)?$|\(.*?\)/g, '').replace(RX_QTY, '').replace(/\s+/g, ' ').replace(/[\s,–-]+$/, '').trim() || label;
+      cur = { meal, name, qty: q ? `${q[1]} ${q[2]}` : '', kcal: k, p: mac.p ?? null, c: mac.c ?? null, f: mac.f ?? null }; items.push(cur); continue;
+    }
+    if (k != null && labelIsMacro && cur && !inTotal) { cur.kcal = k; }
+    if (hasMac && !inTotal) {
+      if (!cur && label && !labelIsMacro) { const q = label.match(RX_QTY); cur = { meal, name: label.replace(RX_QTY, '').trim() || label, qty: q ? `${q[1]} ${q[2]}` : '', kcal: null, p: null, c: null, f: null }; items.push(cur); }
+      if (cur) for (const key of ['p', 'c', 'f']) if (mac[key] != null) cur[key] = mac[key];
+    }
+  }
+  const meals = items.map(x => { const p = x.p || 0, c = x.c || 0, f = x.f || 0; return { meal: x.meal, name: x.name, qty: x.qty, kcal: x.kcal != null ? x.kcal : p * 4 + c * 4 + f * 9, p, c, f }; }).filter(x => x.name && x.kcal > 0);
+  if (!meals.length) throw new Error('ไม่พบรายการอาหารในข้อความ (ต้องมีตัวเลข kcal หรือโปรตีน/คาร์บ/ไขมัน)');
+  return { meals, _free: true };
+}
 function pastePreviewHtml(o) {
   const L = [];
   if (o.meals?.length) L.push(`อาหาร ${o.meals.length} รายการ (${fmt(o.meals.reduce((a, m) => a + (+m.kcal || 0), 0))} kcal · P ${r0(o.meals.reduce((a, m) => a + (+m.p || 0), 0))})`);
@@ -790,7 +833,9 @@ function pastePreviewHtml(o) {
   if (o.pantryUse?.length) L.push(`ตัดคลัง ${o.pantryUse.length} รายการ`);
   if (o.measurement) L.push(`ผลวัดร่างกาย ${o.measurement.date || ''}`);
   if (o.recipes?.length) L.push(`เมนูใหม่ในสมุด ${o.recipes.length} เมนู`);
-  return `<div class="banner"><span>วันที่ <b>${esc(o.date || ui.date)}</b> · ${L.map(esc).join(' · ') || 'ไม่มีข้อมูล'}</span></div>`;
+  const pm = ui.pasteMeal || 'auto';
+  const list = (o.meals || []).map(m => `<li><b>${esc(pm !== 'auto' ? pm : (MEALS.includes(m.meal) ? m.meal : defaultMeal()))}</b> · ${esc(m.name)}${m.qty ? ` <span class="muted">${esc(m.qty)}</span>` : ''} — <span class="num">${fmt(m.kcal)} kcal · P ${r1(m.p)} · C ${r1(m.c)} · F ${r1(m.f)}</span></li>`).join('');
+  return `<div class="banner"><span>วันที่ <b>${esc(o.date || ui.date)}</b> · ${L.map(esc).join(' · ') || 'ไม่มีข้อมูล'}</span></div>${list ? `<ul class="notes small">${list}</ul><p class="xs muted">ถ้ารายการไหนผิด นำเข้าแล้วกดที่รายการเพื่อแก้ได้</p>` : ''}`;
 }
 async function applyPaste(o) {
   const ds = o.date || ui.date; const d = ensureDay(ds); const parts = [];
@@ -879,9 +924,10 @@ document.addEventListener('click', async e => {
     case 'copyDay': copyText(trainerDayText(ui.date)); break;
     case 'copyWeek': copyText(trainerWeekText()); break;
     case 'lineDay': if (await sendLineNow(trainerDayText(ui.date), recipients('food'))) toast('ส่งสรุปทาง LINE แล้ว'); break;
-    case 'pasteOpen': ui.pasted = null; ui.addFiles = []; pasteSheet(); break;
-    case 'pastePreview': try { ui.pasted = parsePaste($('#pasteText').value); $('#pasteOut').innerHTML = pastePreviewHtml(ui.pasted); document.querySelector('[data-act="pasteApply"]').disabled = false; } catch (err) { $('#pasteOut').innerHTML = `<p class="small" style="color:var(--bad)">${esc(err.message)} · ก๊อปข้อความจากอินังให้ครบทั้งก้อน</p>`; } break;
-    case 'pasteApply': if (ui.pasted) { await applyPaste(ui.pasted); ui.pasted = null; closeSheet(); toast('นำเข้าแล้ว'); } break;
+    case 'pasteOpen': ui.pasted = null; ui.pasteMeal = 'auto'; ui.addFiles = []; pasteSheet(); break;
+    case 'pasteMeal': ui.pasteMeal = a.dataset.v; document.querySelectorAll('#pasteMeal button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === ui.pasteMeal)); if (ui.pasted) $('#pasteOut').innerHTML = pastePreviewHtml(ui.pasted); break;
+    case 'pastePreview': try { ui.pasted = parsePaste($('#pasteText').value); $('#pasteOut').innerHTML = pastePreviewHtml(ui.pasted); document.querySelector('[data-act="pasteApply"]').disabled = false; } catch (err) { $('#pasteOut').innerHTML = `<p class="small" style="color:var(--bad)">${esc(err.message)} · ก๊อปข้อความจากอินังให้ครบ</p>`; } break;
+    case 'pasteApply': if (ui.pasted) { const pm = ui.pasteMeal || 'auto'; if (pm !== 'auto') (ui.pasted.meals || []).forEach(m => m.meal = pm); await applyPaste(ui.pasted); ui.pasted = null; closeSheet(); toast('นำเข้าแล้ว'); } break;
     // train
     case 'woNew': ui.wo = woBlank(a.dataset.date || todayStr()); woSheet(); break;
     case 'woEdit': { const w = S.workouts[a.dataset.id]; if (w) { ui.wo = { id: a.dataset.id, ...clone(w) }; woSheet(); } break; }
