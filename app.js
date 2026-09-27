@@ -1,6 +1,6 @@
 // Fit Routine by Beer — v2 (GitHub Pages + Firebase)
 import { firebaseConfig } from './firebase-config.js';
-import { MEALS, TH_DOW, TH_M, FOODS, FOOD, EX, GOALS, PRESETS, LIB_RECIPES, SYN, PROTEINS, CIRC, WORKOUT_TYPES, defaultProfileDoc, defaultPlan } from './data.js?v=20260927c';
+import { MEALS, TH_DOW, TH_M, FOODS, FOOD, EX, GOALS, PRESETS, LIB_RECIPES, SYN, PROTEINS, BUFFETS, CIRC, WORKOUT_TYPES, defaultProfileDoc, defaultPlan } from './data.js?v=20260927d';
 
 const FBV = 'https://www.gstatic.com/firebasejs/10.12.2/';
 let fb = null, db = null, auth = null;
@@ -827,7 +827,12 @@ function foodSheet() {
   <div class="seg" id="fsMeal">${MEALS.map(m => `<button aria-pressed="${ui.fsMeal === m}" data-act="fsMeal" data-v="${m}">${m}</button>`).join('')}</div>
   <div class="choice"><div class="small">${CLIP} <b>หลักฐานของรายการที่จะเพิ่ม</b><br><span class="muted">รูปอาหาร ฉลาก หรือใบเสร็จ แนบก่อนกดเพิ่ม ทุกรายการในหน้านี้จะอ้างอิงไฟล์เดียวกัน</span></div>${attachBtn('add', 'แนบ')}</div>
   <div id="addFilesBox">${thumbs(ui.addFiles)}</div>
-  <details open class="dish"><summary>ประกอบจานเอง · ใส่น้ำหนักวัตถุดิบเป็นกรัม</summary>
+  <details class="dish"><summary>กินข้างนอก · ร้านอาหาร / สั่งกลับบ้าน / บุฟเฟ่ต์</summary>
+   <p class="small muted"><b>ร้านอาหาร/เดลิเวอรี่:</b> กด "เลือกทีละอย่างจากรายการ" แล้วค้นชื่อเมนู เช่น ผัดไทย ข้าวมันไก่ กะเพรา ชานม (ค่าเป็นจานร้าน น้ำมันมากกว่าทำเอง) · ไม่มีในรายการ ถ่ายรูปส่งให้อินังแล้วใช้ "วางจากอินัง"</p>
+   <p class="small muted"><b>บุฟเฟ่ต์:</b> เลือกแบบร้าน แล้วแก้จำนวนจาน/ชิ้นในส่วน "ประกอบจานเอง" ด้านล่างให้ตรงที่กินจริง</p>
+   <div class="seg">${BUFFETS.map(b => `<button data-act="buffet" data-v="${b.k}">${esc(b.n)}</button>`).join('')}</div>
+  </details>
+  <details open class="dish" id="dishBox"><summary>ประกอบจานเอง · ใส่น้ำหนักวัตถุดิบเป็นกรัม</summary>
    <p class="small muted">เลือกวัตถุดิบแล้วใส่น้ำหนักที่ชั่งได้ (เช่น แซลมอน 200 กรัม) แอปแปลงเป็นแคลอรี่และโปรตีนให้เอง · ชั่งตอนดิบให้เลือกแบบ <b>(ดิบ)</b> ชั่งหลังทำสุกให้เลือกแบบ <b>(สุก)</b></p>
    <div id="dishRows">${partsRows(ui.dish, 'dish')}</div>
    <div class="row"><button class="btn sm" data-act="partAdd" data-key="dish">+ เพิ่มวัตถุดิบ</button></div>
@@ -835,8 +840,8 @@ function foodSheet() {
    <label class="f"><span>ชื่อจาน (เว้นว่างได้)</span><input id="dishName" placeholder="เช่น แซลมอนย่างกับข้าวสวย"></label>
    <div class="row"><button class="btn pri" data-act="dishSave">เพิ่มจานนี้ลงบันทึก</button></div>
   </details>
-  <details><summary>เลือกทีละอย่างจากรายการ</summary>
-   <input id="fsSearch" placeholder="ค้นหา เช่น ไข่ ปลา กุ้ง โยเกิร์ต ข้าว"><div class="flist">${rows}</div>
+  <details><summary>เลือกทีละอย่างจากรายการ (รวมเมนูร้านอาหาร)</summary>
+   <input id="fsSearch" placeholder="ค้นหา เช่น ไข่ ปลา ผัดไทย ข้าวมันไก่ ชานม"><div class="flist">${rows}</div>
   </details>
   <details><summary>กรอกค่าโภชนาการเอง (จากฉลาก)</summary>
    <p class="small muted">ใช้เมื่อรู้ค่าโภชนาการจากฉลากเท่านั้น ช่องโปรตีน คาร์บ ไขมัน คือ <b>กรัมของสารอาหาร</b> ไม่ใช่น้ำหนักอาหาร ถ้าจะใส่น้ำหนักอาหารให้ใช้ "ประกอบจานเอง" ด้านบน</p>
@@ -1003,6 +1008,7 @@ document.addEventListener('click', async e => {
     case 'addFoodLib': { const f = FOOD[a.dataset.id]; const q = num(document.querySelector(`.fq[data-id="${f.id}"]`).value) || f.d; const v = foodVal(f, q); addMealItems(ui.date, [{ name: f.n, qty: qtyText(f, q), g: f.u === 'g' ? r0(q) : null, kcal: r0(v.kcal), p: r1(v.p), c: r1(v.c), f: r1(v.f), fileIds: [...(ui.addFiles || [])] }], ui.fsMeal); toast(`เพิ่ม ${f.n} แล้ว`); break; }
     case 'partAdd': { const k = a.dataset.key, L = partsList(k) || []; L.push({ id: 'shrimp', q: 100 }); if (k === 'edit') ui.editParts = L; else if (k === 'rec') ui.rec.parts = L; else ui.dish = L; refreshParts(k); break; }
     case 'partDel': { const k = a.dataset.key, L = partsList(k) || []; L.splice(+a.dataset.i, 1); refreshParts(k); break; }
+    case 'buffet': { const b = BUFFETS.find(x => x.k === a.dataset.v); if (!b) break; ui.dish = clone(b.parts); refreshParts('dish'); const nm = $('#dishName'); if (nm) nm.value = 'บุฟเฟ่ต์' + b.n; const box = $('#dishBox'); if (box) { box.open = true; box.scrollIntoView({ behavior: 'smooth', block: 'start' }); } toast(`ใส่แม่แบบ ${b.n} แล้ว ปรับจำนวนจานตามที่กินจริง`); break; }
     case 'dishSave': { const parts = (ui.dish || []).filter(x => FOOD[x.id] && +x.q > 0); if (!parts.length) { toast('ใส่น้ำหนักวัตถุดิบอย่างน้อย 1 อย่าง'); break; } const t = partsTotal(parts); const name = $('#dishName').value.trim() || parts.map(x => FOOD[x.id].n.replace(/\s*\(.*\)$/, '')).join(' + '); addMealItems(ui.date, [{ name, qty: partsQty(parts), parts: clone(parts), kcal: r0(t.kcal), p: r1(t.p), c: r1(t.c), f: r1(t.f), fileIds: [...(ui.addFiles || [])] }], ui.fsMeal); ui.dish = null; toast(`เพิ่ม ${name} · ${fmt(t.kcal)} kcal · P ${r0(t.p)} g`); closeSheet(); break; }
     case 'mfCalc': $('#mf_kcal').value = r0((readNum('#mf_p') || 0) * 4 + (readNum('#mf_c') || 0) * 4 + (readNum('#mf_f') || 0) * 9); break;
     case 'mfAdd': { const name = $('#mf_name').value.trim(); if (!name) { toast('ใส่ชื่ออาหารก่อน'); break; } const p = readNum('#mf_p') || 0, c = readNum('#mf_c') || 0, f = readNum('#mf_f') || 0; let k = readNum('#mf_kcal'); if (k == null) k = p * 4 + c * 4 + f * 9; addMealItems(ui.date, [{ name, qty: $('#mf_qty').value.trim(), kcal: r0(k), p: r1(p), c: r1(c), f: r1(f), fileIds: [...(ui.addFiles || [])] }], ui.fsMeal); ['#mf_name', '#mf_qty', '#mf_kcal', '#mf_p', '#mf_c', '#mf_f'].forEach(s => $(s).value = ''); toast(`เพิ่ม ${name} แล้ว`); break; }
@@ -1219,7 +1225,7 @@ async function doSignOut() { try { if (S.me && S.me.role !== 'owner') await fb.d
 const unsubs = []; function unsubAll() { unsubs.splice(0).forEach(u => { try { u(); } catch (e) { } }); }
 function subscribe() {
   const on = (q, fn) => unsubs.push(fb.onSnapshot(q, fn, err => console.warn('listen', err)));
-  on(ref('profile/main'), s => { if (pending.has('profile')) return; S.profileDoc = s.exists() ? s.data() : null; S.ready.profile = true; if (isOwner() && S.me) S.me.name = S.profileDoc?.profile?.nick || S.me.name; render(); });
+  on(ref('profile/main'), s => { if (pending.has('profile')) return; S.profileDoc = s.exists() ? s.data() : null; S.ready.profile = true; if (isOwner() && /ไม่ทานเนื้อวัว หมู ไก่/.test(S.profileDoc?.profile?.avoid || '')) { S.profileDoc.profile.avoid = S.profileDoc.profile.avoid.replace(/ไม่ทานเนื้อวัว หมู ไก่/, 'ทานไก่ หมู เนื้อวัวได้บางครั้ง (ส่วนไม่ติดมัน)'); saveProfile(); } if (isOwner() && S.me) S.me.name = S.profileDoc?.profile?.nick || S.me.name; render(); });
   on(ref('plan/main'), s => { if (pending.has('plan')) return; S.plan = s.exists() ? s.data() : null; render(); });
   on(ref('config/app'), s => { S.config = s.exists() ? s.data() : {}; render(); });
   on(fb.query(fb.collection(db, 'days'), fb.orderBy('date', 'desc'), fb.limit(400)), qs => { qs.docChanges().forEach(ch => { const id = ch.doc.id; if (pending.has('day:' + id)) return; if (ch.type === 'removed') delete S.days[id]; else S.days[id] = ch.doc.data(); }); render(); });
