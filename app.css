@@ -270,3 +270,8 @@ ul.feed .txt{grid-column:1/-1;overflow-wrap:anywhere}
 .chip-sync:empty{display:none}
 .chip-link{text-decoration:none}.chip-link:hover{border-color:var(--accent);color:#F6F1E6}
 a.btn{text-decoration:none}
+.part-row{display:flex;flex-direction:column;gap:6px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface2);margin-bottom:8px}
+.part-row .part-k{flex:1;min-width:0;color:var(--muted)}
+details.dish{border:1px solid rgba(201,165,92,.45);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+details.dish>summary{font-weight:600;color:#F6F1E6;cursor:pointer}
+details.dish[open]>summary{margin-bottom:8px}

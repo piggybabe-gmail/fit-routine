@@ -703,24 +703,63 @@ function setAccount() {
 /* ============ sheets ============ */
 function openSheet(html) { $('#sheetRoot').innerHTML = `<div class="sheet-bg" data-act="bgClose"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`; hydratePhotos(); }
 function closeSheet() { $('#sheetRoot').innerHTML = ''; ui.wo = null; }
+/* ---- dish builder: ใส่กรัมของวัตถุดิบแต่ละอย่าง แล้วแปลงเป็น kcal/P/C/F ให้ ---- */
+const CATS = [...new Set(FOODS.map(f => f.cat))];
+function foodOptions(sel) { return CATS.map(c => `<optgroup label="${esc(c)}">${FOODS.filter(f => f.cat === c).map(f => `<option value="${f.id}" ${f.id === sel ? 'selected' : ''}>${esc(f.n)}</option>`).join('')}</optgroup>`).join(''); }
+function partsTotal(parts) { return (parts || []).reduce((a, x) => { const f = FOOD[x.id]; if (!f || !(+x.q > 0)) return a; const v = foodVal(f, +x.q); return { kcal: a.kcal + v.kcal, p: a.p + v.p, c: a.c + v.c, f: a.f + v.f }; }, { kcal: 0, p: 0, c: 0, f: 0 }); }
+function partsQty(parts) { return (parts || []).filter(x => FOOD[x.id] && +x.q > 0).map(x => `${FOOD[x.id].n} ${qtyText(FOOD[x.id], +x.q)}`).join(' + '); }
+function partsRows(parts, key) {
+  return (parts || []).map((x, i) => { const f = FOOD[x.id] || FOODS[0], v = foodVal(f, +x.q || 0); return `<div class="part-row">
+   <select data-part="${key}|${i}|id">${foodOptions(f.id)}</select>
+   <div class="row" style="flex-wrap:nowrap;gap:6px"><input type="number" inputmode="decimal" step="${f.u === 'g' ? 10 : 0.5}" data-part="${key}|${i}|q" value="${esc(x.q)}" style="width:96px"><span class="small muted" style="min-width:52px">${f.u === 'g' ? 'กรัม' : esc(f.un)}</span><span class="small num part-k" data-pk="${key}|${i}">${fmt(v.kcal)} kcal · P ${r1(v.p)} g</span><button class="btn sm link danger" data-act="partDel" data-key="${key}" data-i="${i}" aria-label="ลบวัตถุดิบ">✕</button></div></div>`; }).join('');
+}
+function partsTotalHtml(parts) { const t = partsTotal(parts); return `<b class="num">${fmt(t.kcal)} kcal</b> · <span class="num" style="color:var(--pro)">โปรตีน ${r1(t.p)} g</span> · <span class="num" style="color:var(--carb)">คาร์บ ${r1(t.c)} g</span> · <span class="num" style="color:var(--fat)">ไขมัน ${r1(t.f)} g</span>`; }
+function partsList(key) { return key === 'edit' ? ui.editParts : ui.dish; }
+function refreshParts(key) { const box = document.getElementById(key === 'edit' ? 'editParts' : 'dishRows'); if (box) box.innerHTML = partsRows(partsList(key), key); updatePartsTotals(key); }
+function updatePartsTotals(key) {
+  const parts = partsList(key) || [];
+  parts.forEach((x, i) => { const el = document.querySelector(`[data-pk="${key}|${i}"]`); const f = FOOD[x.id]; if (el && f) { const v = foodVal(f, +x.q || 0); el.textContent = `${fmt(v.kcal)} kcal · P ${r1(v.p)} g`; } });
+  const tEl = document.getElementById(key === 'edit' ? 'editTotal' : 'dishTotal'); if (tEl) tEl.innerHTML = partsTotalHtml(parts);
+  if (key === 'edit') { const t = partsTotal(parts); if ($('#e_kcal')) { $('#e_kcal').value = r0(t.kcal); $('#e_p').value = r1(t.p); $('#e_c').value = r1(t.c); $('#e_f').value = r1(t.f); $('#e_qty').value = partsQty(parts); } }
+}
+function gramsFromQty(qty) { const m = String(qty || '').match(/^\s*(\d+(?:\.\d+)?)\s*(g|กรัม)\s*$/i); return m ? +m[1] : null; }
+
 function foodSheet() {
+  if (!ui.dish || !ui.dish.length) ui.dish = [{ id: 'salmonck', q: 150 }, { id: 'rice', q: 150 }];
   const rows = FOODS.map(f => { const v = foodVal(f, f.d); return `<div class="food-row" data-name="${esc((f.n + ' ' + f.cat).toLowerCase())}"><div><div class="nm">${esc(f.n)}</div><div class="meta"><span class="fk" data-id="${f.id}">${fmt(v.kcal)} kcal · P ${r1(v.p)}</span> · ${f.u === 'g' ? 'กรัม' : esc(f.un)}</div></div><input type="number" class="fq" data-id="${f.id}" step="${f.u === 'g' ? 10 : 0.5}" value="${f.d}"><button class="btn sm" data-act="addFoodLib" data-id="${f.id}">เพิ่ม</button></div>`; }).join('');
   openSheet(`<div class="sheet-h"><h3>เพิ่มอาหาร · ${thShort(ui.date)}</h3><button class="btn sm" data-act="close">ปิด</button></div>
   <div class="seg" id="fsMeal">${MEALS.map(m => `<button aria-pressed="${ui.fsMeal === m}" data-act="fsMeal" data-v="${m}">${m}</button>`).join('')}</div>
   <div class="choice"><div class="small">${CLIP} <b>หลักฐานของรายการที่จะเพิ่ม</b><br><span class="muted">รูปอาหาร ฉลาก หรือใบเสร็จ แนบก่อนกดเพิ่ม ทุกรายการในหน้านี้จะอ้างอิงไฟล์เดียวกัน</span></div>${attachBtn('add', 'แนบ')}</div>
   <div id="addFilesBox">${thumbs(ui.addFiles)}</div>
-  <input id="fsSearch" placeholder="ค้นหา เช่น ไข่ ปลา กุ้ง โยเกิร์ต ข้าว"><div class="flist">${rows}</div>
-  <details open><summary>กรอกเอง</summary><div class="fields">
-   <label class="f" style="grid-column:1/-1"><span>ชื่ออาหาร</span><input id="mf_name"></label><label class="f"><span>ปริมาณ</span><input id="mf_qty" placeholder="1 จาน"></label>
-   <label class="f"><span>kcal</span><input type="number" id="mf_kcal"></label><label class="f"><span>โปรตีน g</span><input type="number" step="0.1" id="mf_p"></label><label class="f"><span>คาร์บ g</span><input type="number" step="0.1" id="mf_c"></label><label class="f"><span>ไขมัน g</span><input type="number" step="0.1" id="mf_f"></label></div>
+  <details open class="dish"><summary>ประกอบจานเอง · ใส่น้ำหนักวัตถุดิบเป็นกรัม</summary>
+   <p class="small muted">เลือกวัตถุดิบแล้วใส่น้ำหนักที่ชั่งได้ (เช่น แซลมอน 200 กรัม) แอปแปลงเป็นแคลอรี่และโปรตีนให้เอง · ชั่งตอนดิบให้เลือกแบบ <b>(ดิบ)</b> ชั่งหลังทำสุกให้เลือกแบบ <b>(สุก)</b></p>
+   <div id="dishRows">${partsRows(ui.dish, 'dish')}</div>
+   <div class="row"><button class="btn sm" data-act="partAdd" data-key="dish">+ เพิ่มวัตถุดิบ</button></div>
+   <div class="choice"><div class="small" id="dishTotal">${partsTotalHtml(ui.dish)}</div></div>
+   <label class="f"><span>ชื่อจาน (เว้นว่างได้)</span><input id="dishName" placeholder="เช่น แซลมอนย่างกับข้าวสวย"></label>
+   <div class="row"><button class="btn pri" data-act="dishSave">เพิ่มจานนี้ลงบันทึก</button></div>
+  </details>
+  <details><summary>เลือกทีละอย่างจากรายการ</summary>
+   <input id="fsSearch" placeholder="ค้นหา เช่น ไข่ ปลา กุ้ง โยเกิร์ต ข้าว"><div class="flist">${rows}</div>
+  </details>
+  <details><summary>กรอกค่าโภชนาการเอง (จากฉลาก)</summary>
+   <p class="small muted">ใช้เมื่อรู้ค่าโภชนาการจากฉลากเท่านั้น ช่องโปรตีน คาร์บ ไขมัน คือ <b>กรัมของสารอาหาร</b> ไม่ใช่น้ำหนักอาหาร ถ้าจะใส่น้ำหนักอาหารให้ใช้ "ประกอบจานเอง" ด้านบน</p>
+   <div class="fields">
+   <label class="f" style="grid-column:1/-1"><span>ชื่ออาหาร</span><input id="mf_name"></label><label class="f"><span>ปริมาณ</span><input id="mf_qty" placeholder="1 ถุง"></label>
+   <label class="f"><span>kcal</span><input type="number" id="mf_kcal"></label><label class="f"><span>โปรตีน (g ของโปรตีน)</span><input type="number" step="0.1" id="mf_p"></label><label class="f"><span>คาร์บ (g)</span><input type="number" step="0.1" id="mf_c"></label><label class="f"><span>ไขมัน (g)</span><input type="number" step="0.1" id="mf_f"></label></div>
    <div class="row" style="margin-top:10px"><button class="btn" data-act="mfCalc">คำนวณ kcal จาก P/C/F</button><button class="btn pri" data-act="mfAdd">เพิ่ม</button></div></details>`);
 }
 function editMealSheet(id) {
   const x = getDay(ui.date).meals.find(m => m.id === id); if (!x) return;
+  const g = +x.g > 0 ? +x.g : gramsFromQty(x.qty);
+  ui.editParts = (x.parts || []).length ? clone(x.parts) : null;
+  const amtField = ui.editParts ? `<div style="grid-column:1/-1"><p class="small muted" style="margin-bottom:6px">แก้น้ำหนักวัตถุดิบแต่ละอย่าง แล้วแอปคำนวณใหม่ให้</p><div id="editParts">${partsRows(ui.editParts, 'edit')}</div><div class="row"><button class="btn sm" data-act="partAdd" data-key="edit">+ เพิ่มวัตถุดิบ</button></div><div class="choice"><div class="small" id="editTotal">${partsTotalHtml(ui.editParts)}</div></div></div>`
+    : g ? `<label class="f" style="grid-column:1/-1"><span>น้ำหนัก (กรัม) · แก้แล้วคำนวณใหม่ให้</span><input type="number" id="e_amt" inputmode="decimal" step="10" value="${g}" data-hasg="1" data-base="${g}" data-k="${esc(x.kcal)}" data-p="${esc(x.p)}" data-c="${esc(x.c)}" data-f="${esc(x.f)}" data-qty="${esc(x.qty)}"></label>`
+    : `<label class="f" style="grid-column:1/-1"><span>จำนวนจาน/ชิ้น เทียบกับที่บันทึกไว้ (1 = เท่าเดิม · 0.5 = ครึ่งหนึ่ง · 2 = สองเท่า) — ไม่ใช่กรัม</span><input type="number" id="e_amt" inputmode="decimal" step="0.25" max="10" value="1" data-hasg="0" data-base="1" data-k="${esc(x.kcal)}" data-p="${esc(x.p)}" data-c="${esc(x.c)}" data-f="${esc(x.f)}" data-qty="${esc(x.qty)}"></label><p class="small muted" style="grid-column:1/-1">ถ้าจะใส่เป็นน้ำหนักกรัม ให้ลบรายการนี้แล้วเพิ่มใหม่ด้วย "ประกอบจานเอง"</p>`;
   openSheet(`<div class="sheet-h"><h3>แก้ไขรายการอาหาร</h3><button class="btn sm" data-act="close">ปิด</button></div><div class="fields">
    <label class="f" style="grid-column:1/-1"><span>ชื่ออาหาร</span><input id="e_name" value="${esc(x.name)}"></label>
    <label class="f"><span>มื้อ</span><select id="e_meal">${MEALS.map(m => `<option ${m === x.meal ? 'selected' : ''}>${m}</option>`).join('')}</select></label><label class="f"><span>ปริมาณ</span><input id="e_qty" value="${esc(x.qty)}"></label>
-   <label class="f" style="grid-column:1/-1"><span>${+x.g > 0 ? 'น้ำหนัก (กรัม) · แก้แล้วคำนวณใหม่ให้' : 'ปริมาณเทียบของเดิม (เท่า)'}</span><input type="number" id="e_amt" inputmode="decimal" step="${+x.g > 0 ? 10 : 0.25}" value="${+x.g > 0 ? x.g : 1}" data-hasg="${+x.g > 0 ? 1 : 0}" data-base="${+x.g > 0 ? x.g : 1}" data-k="${esc(x.kcal)}" data-p="${esc(x.p)}" data-c="${esc(x.c)}" data-f="${esc(x.f)}" data-qty="${esc(x.qty)}"></label>
+   ${amtField}
    <label class="f"><span>kcal</span><input type="number" id="e_kcal" value="${esc(x.kcal)}"></label><label class="f"><span>โปรตีน g</span><input type="number" step="0.1" id="e_p" value="${esc(x.p)}"></label><label class="f"><span>คาร์บ g</span><input type="number" step="0.1" id="e_c" value="${esc(x.c)}"></label><label class="f"><span>ไขมัน g</span><input type="number" step="0.1" id="e_f" value="${esc(x.f)}"></label></div>
   <div class="row">${attachBtn(`mealItem|${ui.date}|${id}`, 'แนบหลักฐานรายการนี้')}${ev(mealEvidence(getDay(ui.date), x))}</div>${thumbs(x.fileIds)}
   <div class="row between"><button class="btn danger" data-act="delMeal" data-id="${id}">ลบรายการ</button><button class="btn pri" data-act="saveMeal" data-id="${id}">บันทึก</button></div>`);
@@ -755,7 +794,7 @@ function pastePreviewHtml(o) {
 }
 async function applyPaste(o) {
   const ds = o.date || ui.date; const d = ensureDay(ds); const parts = [];
-  (o.meals || []).forEach(m => d.meals.push({ id: newId(), meal: MEALS.includes(m.meal) ? m.meal : defaultMeal(), name: String(m.name || 'อาหาร'), qty: String(m.qty || ''), g: +m.g > 0 ? +m.g : null, kcal: r0(m.kcal), p: r1(m.p), c: r1(m.c), f: r1(m.f), fileIds: [...(ui.addFiles || [])] }));
+  (o.meals || []).forEach(m => { const pp = Array.isArray(m.parts) ? m.parts.filter(x => FOOD[x.id] && +x.q > 0).map(x => ({ id: x.id, q: +x.q })) : []; if (pp.length) { const t = partsTotal(pp); Object.assign(m, { kcal: t.kcal, p: t.p, c: t.c, f: t.f, qty: m.qty || partsQty(pp) }); } d.meals.push({ id: newId(), meal: MEALS.includes(m.meal) ? m.meal : defaultMeal(), name: String(m.name || 'อาหาร'), qty: String(m.qty || ''), g: +m.g > 0 ? +m.g : null, ...(pp.length ? { parts: pp } : {}), kcal: r0(m.kcal), p: r1(m.p), c: r1(m.c), f: r1(m.f), fileIds: [...(ui.addFiles || [])] }); });
   (o.exercises || []).forEach(e => d.exercises.push({ id: newId(), type: EX[e.type] ? e.type : 'other', min: +e.min || 0, kcal: e.kcal ?? null, note: String(e.note || ''), fileIds: [...(ui.addFiles || [])] }));
   if (o.water) d.water = Math.max(0, (+d.water || 0) + (+o.water || 0));
   saveDay(ds);
@@ -821,10 +860,13 @@ document.addEventListener('click', async e => {
     case 'addFood': ui.fsMeal = a.dataset.meal || defaultMeal(); ui.addFiles = []; foodSheet(); break;
     case 'fsMeal': ui.fsMeal = a.dataset.v; document.querySelectorAll('#fsMeal button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === ui.fsMeal)); break;
     case 'addFoodLib': { const f = FOOD[a.dataset.id]; const q = num(document.querySelector(`.fq[data-id="${f.id}"]`).value) || f.d; const v = foodVal(f, q); addMealItems(ui.date, [{ name: f.n, qty: qtyText(f, q), g: f.u === 'g' ? r0(q) : null, kcal: r0(v.kcal), p: r1(v.p), c: r1(v.c), f: r1(v.f), fileIds: [...(ui.addFiles || [])] }], ui.fsMeal); toast(`เพิ่ม ${f.n} แล้ว`); break; }
+    case 'partAdd': { const k = a.dataset.key, L = partsList(k) || []; L.push({ id: 'shrimp', q: 100 }); if (k === 'edit') ui.editParts = L; else ui.dish = L; refreshParts(k); break; }
+    case 'partDel': { const k = a.dataset.key, L = partsList(k) || []; L.splice(+a.dataset.i, 1); refreshParts(k); break; }
+    case 'dishSave': { const parts = (ui.dish || []).filter(x => FOOD[x.id] && +x.q > 0); if (!parts.length) { toast('ใส่น้ำหนักวัตถุดิบอย่างน้อย 1 อย่าง'); break; } const t = partsTotal(parts); const name = $('#dishName').value.trim() || parts.map(x => FOOD[x.id].n.replace(/\s*\(.*\)$/, '')).join(' + '); addMealItems(ui.date, [{ name, qty: partsQty(parts), parts: clone(parts), kcal: r0(t.kcal), p: r1(t.p), c: r1(t.c), f: r1(t.f), fileIds: [...(ui.addFiles || [])] }], ui.fsMeal); ui.dish = null; toast(`เพิ่ม ${name} · ${fmt(t.kcal)} kcal · P ${r0(t.p)} g`); closeSheet(); break; }
     case 'mfCalc': $('#mf_kcal').value = r0((readNum('#mf_p') || 0) * 4 + (readNum('#mf_c') || 0) * 4 + (readNum('#mf_f') || 0) * 9); break;
     case 'mfAdd': { const name = $('#mf_name').value.trim(); if (!name) { toast('ใส่ชื่ออาหารก่อน'); break; } const p = readNum('#mf_p') || 0, c = readNum('#mf_c') || 0, f = readNum('#mf_f') || 0; let k = readNum('#mf_kcal'); if (k == null) k = p * 4 + c * 4 + f * 9; addMealItems(ui.date, [{ name, qty: $('#mf_qty').value.trim(), kcal: r0(k), p: r1(p), c: r1(c), f: r1(f), fileIds: [...(ui.addFiles || [])] }], ui.fsMeal); ['#mf_name', '#mf_qty', '#mf_kcal', '#mf_p', '#mf_c', '#mf_f'].forEach(s => $(s).value = ''); toast(`เพิ่ม ${name} แล้ว`); break; }
     case 'editMeal': editMealSheet(a.dataset.id); break;
-    case 'saveMeal': { const id = a.dataset.id, ds = ui.date, am = $('#e_amt'); const v = { name: $('#e_name').value.trim() || 'อาหาร', meal: $('#e_meal').value, qty: $('#e_qty').value.trim(), kcal: r0(readNum('#e_kcal') || 0), p: r1(readNum('#e_p') || 0), c: r1(readNum('#e_c') || 0), f: r1(readNum('#e_f') || 0) }; if (am && am.dataset.hasg === '1' && num(am.value) > 0) v.g = r0(num(am.value)); mut(() => { const x = ensureDay(ds).meals.find(m => m.id === id); if (x) Object.assign(x, v); }, { day: ds }); closeSheet(); break; }
+    case 'saveMeal': { const id = a.dataset.id, ds = ui.date, am = $('#e_amt'); const v = { name: $('#e_name').value.trim() || 'อาหาร', meal: $('#e_meal').value, qty: $('#e_qty').value.trim(), kcal: r0(readNum('#e_kcal') || 0), p: r1(readNum('#e_p') || 0), c: r1(readNum('#e_c') || 0), f: r1(readNum('#e_f') || 0) }; if (am && am.dataset.hasg === '1' && num(am.value) > 0) v.g = r0(num(am.value)); if (am && am.dataset.hasg === '0' && num(am.value) > 10) { toast('ช่องจำนวนเป็น "เท่า" ไม่ใช่กรัม ใส่ได้ไม่เกิน 10'); break; } if (ui.editParts) { const pp = ui.editParts.filter(x => FOOD[x.id] && +x.q > 0); const t = partsTotal(pp); Object.assign(v, { parts: clone(pp), qty: partsQty(pp), kcal: r0(t.kcal), p: r1(t.p), c: r1(t.c), f: r1(t.f) }); } mut(() => { const x = ensureDay(ds).meals.find(m => m.id === id); if (x) Object.assign(x, v); }, { day: ds }); closeSheet(); break; }
     case 'delMeal': { const id = a.dataset.id, ds = ui.date; mut(() => { const d = ensureDay(ds); d.meals = d.meals.filter(m => m.id !== id); }, { day: ds }); closeSheet(); break; }
     case 'addEx': ui.exFiles = []; exSheet(null); break;
     case 'editEx': exSheet(a.dataset.id); break;
@@ -955,6 +997,8 @@ document.addEventListener('input', e => {
   const el = e.target;
   if (el.id === 'fsSearch') { const q = el.value.trim().toLowerCase(); document.querySelectorAll('.food-row[data-name]').forEach(r => r.hidden = !!q && !r.dataset.name.includes(q)); return; }
   if (el.classList.contains('fq')) { const f = FOOD[el.dataset.id]; const v = foodVal(f, num(el.value) || 0); const k = document.querySelector(`.fk[data-id="${f.id}"]`); if (k) k.textContent = `${fmt(v.kcal)} kcal · P ${r1(v.p)}`; return; }
+  if (el.dataset.part) { const [k, i, fld] = el.dataset.part.split('|'); const L = partsList(k); if (!L || !L[+i]) return; if (fld === 'id') { const f = FOOD[el.value]; L[+i].id = el.value; if (f && f.u !== 'g' && +L[+i].q > 10) L[+i].q = f.d; refreshParts(k); } else { L[+i].q = num(el.value) || 0; updatePartsTotals(k); } return; }
+  if (el.id === 'e_amt' && el.dataset.hasg === '0' && num(el.value) > 10) { toast('ช่องนี้เป็นจำนวน "เท่า" ไม่ใช่กรัม'); return; }
   if (el.id === 'e_amt') { const d = el.dataset, v = num(el.value); if (!(v > 0)) return; const f = v / (+d.base || 1); $('#e_kcal').value = r0(+d.k * f); $('#e_p').value = r1(+d.p * f); $('#e_c').value = r1(+d.c * f); $('#e_f').value = r1(+d.f * f); $('#e_qty').value = d.hasg === '1' ? `${r0(v)} g` : (f === 1 ? d.qty : `${d.qty} ×${v}`); return; }
   if (el.dataset.wo && ui.wo) setPath(ui.wo, el.dataset.wo, el.value);
 });
