@@ -1,6 +1,6 @@
 // Fit Routine by Beer — v2 (GitHub Pages + Firebase)
 import { firebaseConfig } from './firebase-config.js';
-import { MEALS, TH_DOW, TH_M, FOODS, FOOD, EX, GOALS, PRESETS, LIB_RECIPES, SYN, PROTEINS, BUFFETS, DRESSINGS, SNACK_LIQUIDS, CIRC, WORKOUT_TYPES, defaultProfileDoc, defaultPlan } from './data.js?v=20260928b';
+import { MEALS, TH_DOW, TH_M, FOODS, FOOD, EX, GOALS, PRESETS, LIB_RECIPES, SYN, PROTEINS, BUFFETS, DRESSINGS, SNACK_LIQUIDS, CIRC, WORKOUT_TYPES, defaultProfileDoc, defaultPlan } from './data.js?v=20260928c';
 
 const FBV = 'https://www.gstatic.com/firebasejs/10.12.2/';
 let fb = null, db = null, auth = null;
@@ -823,19 +823,20 @@ function gramsFromQty(qty) { const m = String(qty || '').match(/^\s*(\d+(?:\.\d+
 
 // ---- อาหารว่าง: กรีกโยเกิร์ต + มิกซ์เบอร์รี่ + เมล็ดเชีย (นม/น้ำแยกรายการ) ----
 function snackState() {
-  if (!ui.sn) { let v = null; try { v = JSON.parse(localStorage.getItem('fr_snack') || 'null'); } catch (e) { v = null; } ui.sn = { chia: 1, yg: 150, br: 60, liq: 'skim', ml: 200, ...(v || {}) }; }
+  if (!ui.sn) { let v = null; try { v = JSON.parse(localStorage.getItem('fr_snack') || 'null'); } catch (e) { v = null; } ui.sn = { chia: 1, yg: 150, br: 60, liq: 'skim', ml: 200, box: 1, ...(v || {}) }; }
   return ui.sn;
 }
 function snackSaveState() { try { localStorage.setItem('fr_snack', JSON.stringify(ui.sn)); } catch (e) { /* ไม่มี storage ก็ใช้ค่าในหน้าต่อได้ */ } }
 function snackBowlParts(sn) { return [{ id: 'greek', q: +sn.yg || 0 }, { id: 'berries', q: +sn.br || 0 }, { id: 'chia', q: +sn.chia || 0 }].filter(x => x.q > 0); }
 function snackLiquid(sn) { return SNACK_LIQUIDS.find(x => x.k === sn.liq) || SNACK_LIQUIDS[0]; }
+function snackLiqQty(sn, L) { const q = L.box ? (+sn.box || 0) : (+sn.ml || 0); return { q, txt: L.box ? `${q} กล่อง` : `${fmt(q)} มล.` }; }
 function snackTotalsHtml() {
-  const sn = snackState(), bowl = partsTotal(snackBowlParts(sn)), L = snackLiquid(sn), ml = +sn.ml || 0;
+  const sn = snackState(), bowl = partsTotal(snackBowlParts(sn)), L = snackLiquid(sn), ml = +sn.ml || 0, LQ = snackLiqQty(sn, L);
   const chiaV = foodVal(FOOD.chia, +sn.chia || 0);
-  const liq = L.id && ml > 0 ? foodVal(FOOD[L.id], ml) : null;
+  const liq = L.id && LQ.q > 0 ? foodVal(FOOD[L.id], LQ.q) : null;
   const all = { kcal: bowl.kcal + (liq ? liq.kcal : 0), p: bowl.p + (liq ? liq.p : 0) };
   return `<div>ถ้วยโยเกิร์ต: <b class="num">${fmt(bowl.kcal)} kcal</b> · P ${r1(bowl.p)} g${+sn.chia > 0 ? ` <span class="muted">(เชีย ${sn.chia} ช้อนโต๊ะ = ${fmt(chiaV.kcal)} kcal)</span>` : ''}</div>
-  <div>${liq ? `${esc(L.n)} ${fmt(ml)} มล. (แยกรายการ): <b class="num">${fmt(liq.kcal)} kcal</b> · P ${r1(liq.p)} g` : L.water ? `น้ำเปล่า ${fmt(ml)} มล.: 0 kcal · นับเข้าน้ำดื่มของวัน` : '<span class="muted">ไม่ใส่นม/น้ำ</span>'}</div>
+  <div>${liq ? `${esc(L.n)} ${LQ.txt} (แยกรายการ): <b class="num">${fmt(liq.kcal)} kcal</b> · P ${r1(liq.p)} g` : L.water ? `น้ำเปล่า ${fmt(ml)} มล.: 0 kcal · นับเข้าน้ำดื่มของวัน` : '<span class="muted">ไม่ใส่นม/น้ำ</span>'}</div>
   <div style="margin-top:4px"><b class="num">รวม ${fmt(all.kcal)} kcal · โปรตีน ${r1(all.p)} g</b></div>`;
 }
 function snackHtml() {
@@ -846,7 +847,7 @@ function snackHtml() {
    <div class="fields"><label class="f"><span>กรีกโยเกิร์ต (กรัม)</span><input type="number" inputmode="decimal" step="10" id="snYg" value="${esc(sn.yg)}"></label><label class="f"><span>มิกซ์เบอร์รี่ (กรัม)</span><input type="number" inputmode="decimal" step="10" id="snBr" value="${esc(sn.br)}"></label></div>
    <div class="small"><b>ผสมกับ</b></div>
    <div class="seg">${SNACK_LIQUIDS.map(x => `<button aria-pressed="${sn.liq === x.k}" data-act="snLiq" data-v="${x.k}">${esc(x.n)}</button>`).join('')}</div>
-   ${L.k !== 'none' ? `<div class="fields"><label class="f"><span>${esc(L.n)} (มล.)</span><input type="number" inputmode="decimal" step="10" id="snMl" value="${esc(sn.ml)}"></label></div>` : ''}
+   ${L.box ? `<div class="fields"><label class="f"><span>จำนวนกล่อง</span><input type="number" inputmode="decimal" step="0.5" min="0" id="snBox" value="${esc(sn.box)}"></label></div><p class="small muted">ค่าต่อกล่องตามฉลาก: 80 kcal · น้ำตาล 10 g · ไขมัน 3.5 g (โปรตีนประมาณ 2.5 g)</p>` : L.k !== 'none' ? `<div class="fields"><label class="f"><span>${esc(L.n)} (มล.)</span><input type="number" inputmode="decimal" step="10" id="snMl" value="${esc(sn.ml)}"></label></div>` : ''}
    <div class="choice"><div class="small" id="snTotal">${snackTotalsHtml()}</div></div>
    <div class="row"><button class="btn pri" data-act="snSave">บันทึกอาหารว่าง</button></div>`;
 }
@@ -1051,10 +1052,10 @@ document.addEventListener('click', async e => {
     case 'snLiq': { snackState().liq = a.dataset.v; snackSaveState(); refreshSnack(); break; }
     case 'snSave': {
       const sn = snackState(), parts = snackBowlParts(sn); if (!parts.length) { toast('ใส่ปริมาณโยเกิร์ต/เบอร์รี่/เชียอย่างน้อย 1 อย่าง'); break; }
-      const t = partsTotal(parts), L = snackLiquid(sn), ml = +sn.ml || 0, files = [...(ui.addFiles || [])];
+      const t = partsTotal(parts), L = snackLiquid(sn), ml = +sn.ml || 0, LQ = snackLiqQty(sn, L), files = [...(ui.addFiles || [])];
       const name = 'กรีกโยเกิร์ต' + (+sn.br > 0 ? ' + มิกซ์เบอร์รี่' : '') + (+sn.chia > 0 ? ` + เมล็ดเชีย ${sn.chia} ช้อนโต๊ะ` : '');
       const items = [{ name, qty: partsQty(parts), parts: clone(parts), kcal: r0(t.kcal), p: r1(t.p), c: r1(t.c), f: r1(t.f), fileIds: files }];
-      if (L.id && ml > 0) { const f = FOOD[L.id], v = foodVal(f, ml); items.push({ name: L.n + ' (ผสมเชีย)', qty: `${fmt(ml)} มล.`, kcal: r0(v.kcal), p: r1(v.p), c: r1(v.c), f: r1(v.f), fileIds: files }); }
+      if (L.id && LQ.q > 0) { const f = FOOD[L.id], v = foodVal(f, LQ.q); items.push({ name: (L.box ? 'นมตราหมี ยูเอชที รสจืด' : L.n) + ' (ผสมเชีย)', qty: LQ.txt, kcal: r0(v.kcal), p: r1(v.p), c: r1(v.c), f: r1(v.f), fileIds: files }); }
       const ds = ui.date;
       if (L.water && ml > 0) { const d = ensureDay(ds); d.water = Math.max(0, (+d.water || 0) + ml); }
       snackSaveState(); addMealItems(ds, items, 'ว่าง');
@@ -1224,7 +1225,7 @@ document.addEventListener('input', e => {
   const el = e.target;
   if (el.id === 'fsSearch') { const q = el.value.trim().toLowerCase(); document.querySelectorAll('.food-row[data-name]').forEach(r => r.hidden = !!q && !r.dataset.name.includes(q)); return; }
   if (el.classList.contains('fq')) { const f = FOOD[el.dataset.id]; const v = foodVal(f, num(el.value) || 0); const k = document.querySelector(`.fk[data-id="${f.id}"]`); if (k) k.textContent = `${fmt(v.kcal)} kcal · P ${r1(v.p)}`; return; }
-  if (el.id === 'snYg' || el.id === 'snBr' || el.id === 'snMl') { const sn = snackState(); sn[{ snYg: 'yg', snBr: 'br', snMl: 'ml' }[el.id]] = num(el.value) || 0; snackSaveState(); const t = $('#snTotal'); if (t) t.innerHTML = snackTotalsHtml(); return; }
+  if (el.id === 'snYg' || el.id === 'snBr' || el.id === 'snMl' || el.id === 'snBox') { const sn = snackState(); sn[{ snYg: 'yg', snBr: 'br', snMl: 'ml', snBox: 'box' }[el.id]] = num(el.value) || 0; snackSaveState(); const t = $('#snTotal'); if (t) t.innerHTML = snackTotalsHtml(); return; }
   if (el.dataset.mprot) { ui.menuProt[el.dataset.mprot] = el.value; render(); return; }
   if (el.dataset.part) { const [k, i, fld] = el.dataset.part.split('|'); const L = partsList(k); if (!L || !L[+i]) return; if (fld === 'id') { const f = FOOD[el.value]; L[+i].id = el.value; if (f && f.u !== 'g' && +L[+i].q > 10) L[+i].q = f.d; refreshParts(k); } else { L[+i].q = num(el.value) || 0; updatePartsTotals(k); } return; }
   if (el.id === 'e_amt' && el.dataset.hasg === '0' && num(el.value) > 10) { toast('ช่องนี้เป็นจำนวน "เท่า" ไม่ใช่กรัม'); return; }
