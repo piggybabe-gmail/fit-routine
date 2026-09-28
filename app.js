@@ -1,6 +1,6 @@
 // Fit Routine by Beer — v2 (GitHub Pages + Firebase)
 import { firebaseConfig } from './firebase-config.js';
-import { MEALS, TH_DOW, TH_M, FOODS, FOOD, EX, GOALS, PRESETS, LIB_RECIPES, SYN, PROTEINS, BUFFETS, DRESSINGS, CIRC, WORKOUT_TYPES, defaultProfileDoc, defaultPlan } from './data.js?v=20260927f';
+import { MEALS, TH_DOW, TH_M, FOODS, FOOD, EX, GOALS, PRESETS, LIB_RECIPES, SYN, PROTEINS, BUFFETS, DRESSINGS, CIRC, WORKOUT_TYPES, defaultProfileDoc, defaultPlan } from './data.js?v=20260928a';
 
 const FBV = 'https://www.gstatic.com/firebasejs/10.12.2/';
 let fb = null, db = null, auth = null;
