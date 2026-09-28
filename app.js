@@ -1,6 +1,6 @@
 // Fit Routine by Beer — v2 (GitHub Pages + Firebase)
 import { firebaseConfig } from './firebase-config.js';
-import { MEALS, TH_DOW, TH_M, FOODS, FOOD, EX, GOALS, PRESETS, LIB_RECIPES, SYN, PROTEINS, BUFFETS, DRESSINGS, SNACK_LIQUIDS, CIRC, WORKOUT_TYPES, defaultProfileDoc, defaultPlan } from './data.js?v=20260928c';
+import { MEALS, TH_DOW, TH_M, FOODS, FOOD, EX, GOALS, PRESETS, LIB_RECIPES, SYN, PROTEINS, BUFFETS, DRESSINGS, SNACK_LIQUIDS, STEAK_MAINS, STEAK_SIDES, STEAK_SAUCES, SALADBAR, CIRC, WORKOUT_TYPES, defaultProfileDoc, defaultPlan } from './data.js?v=20260928d';
 
 const FBV = 'https://www.gstatic.com/firebasejs/10.12.2/';
 let fb = null, db = null, auth = null;
@@ -851,6 +851,41 @@ function snackHtml() {
    <div class="choice"><div class="small" id="snTotal">${snackTotalsHtml()}</div></div>
    <div class="row"><button class="btn pri" data-act="snSave">บันทึกอาหารว่าง</button></div>`;
 }
+function steakState() {
+  if (!ui.st) { let v = null; try { v = JSON.parse(localStorage.getItem('fr_steak') || 'null'); } catch (e) { v = null; } ui.st = { shop: 'Sizzler', main: 'pork', side: 'fries', sidePct: 100, sauce: 'pepper', garnish: 1, shallot: 1, ...(v || {}), bar: {} }; }
+  return ui.st;
+}
+function steakSaveState() { try { const { bar, ...rest } = ui.st; localStorage.setItem('fr_steak', JSON.stringify(rest)); } catch (e) { /* ไม่มี storage ก็ใช้ค่าในหน้าต่อได้ */ } }
+function steakPick(list, k) { return list.find(x => x.k === k) || list[0]; }
+function steakPlateParts(st) {
+  const m = steakPick(STEAK_MAINS, st.main), s = steakPick(STEAK_SIDES, st.side), c = steakPick(STEAK_SAUCES, st.sauce);
+  return [{ id: m.id, q: 1 }, s.id ? { id: s.id, q: (+st.sidePct || 0) / 100 } : null, c.id ? { id: c.id, q: 1 } : null, +st.garnish ? { id: 's_garnish', q: 1 } : null, +st.shallot ? { id: 's_shallot', q: +st.shallot } : null].filter(x => x && +x.q > 0);
+}
+function steakBarParts(st) { return SALADBAR.map(id => ({ id, q: +(st.bar || {})[id] || 0 })).filter(x => x.q > 0); }
+function steakTotalsHtml() {
+  const st = steakState(), pl = partsTotal(steakPlateParts(st)), br = partsTotal(steakBarParts(st));
+  const all = { kcal: pl.kcal + br.kcal, p: pl.p + br.p, c: pl.c + br.c, f: pl.f + br.f };
+  return `<div>จานสเต็ก: <b class="num">${fmt(pl.kcal)} kcal</b> · P ${r1(pl.p)} · C ${r1(pl.c)} · F ${r1(pl.f)}</div>
+  <div>${br.kcal > 0 ? `สลัดบาร์ (แยกรายการ): <b class="num">${fmt(br.kcal)} kcal</b> · P ${r1(br.p)} · C ${r1(br.c)} · F ${r1(br.f)}` : '<span class="muted">ยังไม่ได้ใส่สลัดบาร์</span>'}</div>
+  <div style="margin-top:4px"><b class="num">รวม ${fmt(all.kcal)} kcal · โปรตีน ${r1(all.p)} g · คาร์บ ${r1(all.c)} g · ไขมัน ${r1(all.f)} g</b></div>`;
+}
+function steakHtml() {
+  const st = steakState(), seg = (list, key, act) => `<div class="seg">${list.map(x => `<button aria-pressed="${String(st[key]) === String(x.k)}" data-act="${act}" data-v="${x.k}">${esc(x.n)}</button>`).join('')}</div>`;
+  const side = steakPick(STEAK_SIDES, st.side);
+  return `<p class="small muted">เลือกเหมือนสั่งที่ร้าน แอปบันทึก <b>จานสเต็ก</b> 1 รายการ และ <b>สลัดบาร์</b> แยกอีกรายการ · ค่าเป็นขนาดร้านทั่วไป (Sizzler, Santa Fe, Jeffer ใช้ได้เหมือนกัน)</p>
+   <div class="fields"><label class="f"><span>ชื่อร้าน</span><input id="stShop" value="${esc(st.shop)}"></label></div>
+   <div class="small"><b>1. สเต็ก</b></div>${seg(STEAK_MAINS, 'main', 'stMain')}
+   <div class="small"><b>2. เครื่องเคียง</b></div>${seg(STEAK_SIDES, 'side', 'stSide')}
+   ${side.id ? `<div class="small">กินเครื่องเคียงไป</div>${seg([{ k: 100, n: 'หมด' }, { k: 75, n: '¾' }, { k: 50, n: 'ครึ่ง' }, { k: 25, n: '¼' }, { k: 0, n: 'ไม่กิน' }], 'sidePct', 'stPct')}` : ''}
+   <div class="small"><b>3. ซอส</b></div>${seg(STEAK_SAUCES, 'sauce', 'stSauce')}
+   <div class="small"><b>4. บนจาน</b></div>
+   <div class="seg"><button aria-pressed="${!!+st.garnish}" data-act="stGarnish">สลัดข้างจาน</button><button aria-pressed="${!!+st.shallot}" data-act="stShallot">หอมเจียวโรยหน้า</button></div>
+   <div class="small" style="margin-top:6px"><b>5. สลัดบาร์</b> <span class="muted">ใส่จำนวนที่ตักจริง (ครึ่งหนึ่งใส่ 0.5)</span></div>
+   <div class="flist">${SALADBAR.map(id => { const f = FOOD[id], v = foodVal(f, 1); return `<div class="food-row"><div><div class="nm">${esc(f.n)}</div><div class="meta">${fmt(v.kcal)} kcal · P ${r1(v.p)} · F ${r1(v.f)} ต่อ ${esc(f.un)}</div></div><input type="number" class="stbar" data-id="${id}" step="0.5" min="0" inputmode="decimal" value="${esc((st.bar || {})[id] || '')}" placeholder="0"></div>`; }).join('')}</div>
+   <div class="choice"><div class="small" id="stTotal">${steakTotalsHtml()}</div></div>
+   <div class="row"><button class="btn pri" data-act="stSave">บันทึกเซ็ตนี้</button></div>`;
+}
+function refreshSteak() { const b = document.getElementById('steakBody'); if (b) b.innerHTML = steakHtml(); }
 function refreshSnack() { const b = document.getElementById('snackBody'); if (b) b.innerHTML = snackHtml(); }
 
 function foodSheet() {
@@ -862,6 +897,9 @@ function foodSheet() {
   <div id="addFilesBox">${thumbs(ui.addFiles)}</div>
   <details class="dish" id="snackBox" ${ui.fsMeal === 'ว่าง' ? 'open' : ''}><summary>อาหารว่าง · กรีกโยเกิร์ต + เบอร์รี่ + เมล็ดเชีย (+ นม/น้ำแยก)</summary>
    <div id="snackBody">${snackHtml()}</div>
+  </details>
+  <details class="dish" id="steakBox"><summary>ร้านสเต็ก + สลัดบาร์ · Sizzler / Santa Fe / Jeffer</summary>
+   <div id="steakBody">${steakHtml()}</div>
   </details>
   <details class="dish"><summary>กินข้างนอก · ร้านอาหาร / สั่งกลับบ้าน / บุฟเฟ่ต์</summary>
    <p class="small muted"><b>ร้านอาหาร/เดลิเวอรี่:</b> กด "เลือกทีละอย่างจากรายการ" แล้วค้นชื่อเมนู เช่น ผัดไทย ข้าวมันไก่ กะเพรา ชานม (ค่าเป็นจานร้าน น้ำมันมากกว่าทำเอง) · ไม่มีในรายการ ถ่ายรูปส่งให้อินังแล้วใช้ "วางจากอินัง"</p>
@@ -1048,6 +1086,21 @@ document.addEventListener('click', async e => {
     case 'addFoodLib': { const f = FOOD[a.dataset.id]; const q = num(document.querySelector(`.fq[data-id="${f.id}"]`).value) || f.d; const v = foodVal(f, q); addMealItems(ui.date, [{ name: f.n, qty: qtyText(f, q), g: f.u === 'g' ? r0(q) : null, kcal: r0(v.kcal), p: r1(v.p), c: r1(v.c), f: r1(v.f), fileIds: [...(ui.addFiles || [])] }], ui.fsMeal); toast(`เพิ่ม ${f.n} แล้ว`); break; }
     case 'partAdd': { const k = a.dataset.key, L = partsList(k) || []; L.push({ id: 'shrimp', q: 100 }); if (k === 'edit') ui.editParts = L; else if (k === 'rec') ui.rec.parts = L; else ui.dish = L; refreshParts(k); break; }
     case 'partDel': { const k = a.dataset.key, L = partsList(k) || []; L.splice(+a.dataset.i, 1); refreshParts(k); break; }
+    case 'stMain': steakState().main = a.dataset.v; steakSaveState(); refreshSteak(); break;
+    case 'stSide': steakState().side = a.dataset.v; steakState().sidePct = 100; steakSaveState(); refreshSteak(); break;
+    case 'stPct': steakState().sidePct = +a.dataset.v; refreshSteak(); break;
+    case 'stSauce': steakState().sauce = a.dataset.v; steakSaveState(); refreshSteak(); break;
+    case 'stGarnish': { const st = steakState(); st.garnish = +st.garnish ? 0 : 1; steakSaveState(); refreshSteak(); break; }
+    case 'stShallot': { const st = steakState(); st.shallot = +st.shallot ? 0 : 1; steakSaveState(); refreshSteak(); break; }
+    case 'stSave': {
+      const st = steakState(), plate = steakPlateParts(st), bar = steakBarParts(st), files = [...(ui.addFiles || [])], shop = (st.shop || '').trim() || 'ร้านสเต็ก';
+      const m = steakPick(STEAK_MAINS, st.main), s = steakPick(STEAK_SIDES, st.side), c = steakPick(STEAK_SAUCES, st.sauce);
+      const pct = +st.sidePct || 0, sideTxt = s.id && pct > 0 ? ` + ${s.n}${pct < 100 ? ` (กิน ${pct}%)` : ''}` : '';
+      const tp = partsTotal(plate), items = [{ name: `${shop}: ${m.n}${c.id ? ' ซอส' + c.n : ''}${sideTxt}`, qty: partsQty(plate), parts: clone(plate), kcal: r0(tp.kcal), p: r1(tp.p), c: r1(tp.c), f: r1(tp.f), fileIds: files }];
+      if (bar.length) { const tb = partsTotal(bar); items.push({ name: `${shop}: สลัดบาร์`, qty: partsQty(bar), parts: clone(bar), kcal: r0(tb.kcal), p: r1(tb.p), c: r1(tb.c), f: r1(tb.f), fileIds: files }); }
+      steakSaveState(); addMealItems(ui.date, items, ui.fsMeal); st.bar = {};
+      toast(`บันทึก ${shop} ${fmt(items.reduce((s2, x) => s2 + x.kcal, 0))} kcal${items.length > 1 ? ' (สลัดบาร์แยกรายการ)' : ''}`); closeSheet(); break;
+    }
     case 'snChia': { snackState().chia = +a.dataset.v; snackSaveState(); refreshSnack(); break; }
     case 'snLiq': { snackState().liq = a.dataset.v; snackSaveState(); refreshSnack(); break; }
     case 'snSave': {
@@ -1225,6 +1278,8 @@ document.addEventListener('input', e => {
   const el = e.target;
   if (el.id === 'fsSearch') { const q = el.value.trim().toLowerCase(); document.querySelectorAll('.food-row[data-name]').forEach(r => r.hidden = !!q && !r.dataset.name.includes(q)); return; }
   if (el.classList.contains('fq')) { const f = FOOD[el.dataset.id]; const v = foodVal(f, num(el.value) || 0); const k = document.querySelector(`.fk[data-id="${f.id}"]`); if (k) k.textContent = `${fmt(v.kcal)} kcal · P ${r1(v.p)}`; return; }
+  if (el.id === 'stShop') { steakState().shop = el.value; steakSaveState(); return; }
+  if (el.classList.contains('stbar')) { const st = steakState(); st.bar = st.bar || {}; st.bar[el.dataset.id] = num(el.value) || 0; const t = $('#stTotal'); if (t) t.innerHTML = steakTotalsHtml(); return; }
   if (el.id === 'snYg' || el.id === 'snBr' || el.id === 'snMl' || el.id === 'snBox') { const sn = snackState(); sn[{ snYg: 'yg', snBr: 'br', snMl: 'ml', snBox: 'box' }[el.id]] = num(el.value) || 0; snackSaveState(); const t = $('#snTotal'); if (t) t.innerHTML = snackTotalsHtml(); return; }
   if (el.dataset.mprot) { ui.menuProt[el.dataset.mprot] = el.value; render(); return; }
   if (el.dataset.part) { const [k, i, fld] = el.dataset.part.split('|'); const L = partsList(k); if (!L || !L[+i]) return; if (fld === 'id') { const f = FOOD[el.value]; L[+i].id = el.value; if (f && f.u !== 'g' && +L[+i].q > 10) L[+i].q = f.d; refreshParts(k); } else { L[+i].q = num(el.value) || 0; updatePartsTotals(k); } return; }
