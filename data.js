@@ -1,3 +1,4 @@
+import { cafeFoods } from './cafe.js?v=20260929a';
 export const MEALS=['เช้า','กลางวัน','ว่าง','เย็น'];
 export const TH_DOW=['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
 export const TH_M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
@@ -329,6 +330,8 @@ export const PROTEINS=[
 
 export const CIRC=[['waist','รอบเอว (ระดับสะดือ)'],['hip','รอบสะโพก (รวมหน้าท้อง)'],['bust','รอบอก (ระดับเนินอก)'],['chest','รอบอกบน'],['armR','ต้นแขนขวา'],['armL','ต้นแขนซ้าย'],['thighR','ต้นขาขวา'],['thighL','ต้นขาซ้าย']];
 
+// คาเฟ่: เครื่องดื่มทุกแบบ + เบเกอรี่ ให้ค้นเจอในรายการ
+FOODS.push(...cafeFoods());
 export const FOOD=Object.fromEntries(FOODS.map(f=>[f.id,f]));
 
 export const WORKOUT_TYPES=[['push','Push (ดัน) · อก ไหล่ หลังแขน'],['pull','Pull (ดึง) · หลัง สะบัก หน้าแขน'],['legs','Legs (ขา) + ทรงตัว'],['other','อื่น ๆ']];
